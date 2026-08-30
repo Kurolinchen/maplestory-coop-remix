@@ -1,0 +1,47 @@
+# Local DEV stack for MapleStory Co-op Remix.
+# Deliberately separate from upstream docker-compose.yml (empty DB password there) -
+# see docs/DECISIONS.md D1. Use via ops/*.sh only.
+services:
+  db:
+    image: mysql:8.4.0
+    environment:
+      MYSQL_DATABASE: cosmic
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in ops/.env}
+    ports:
+      # DB only reachable from localhost, never from the network
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - maple-dev-db:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysql -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" -e "SELECT 1" >/dev/null 2>&1
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  maplestory:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # login server
+      - "8484:8484"
+      # world 1, channels 1-3 (format WWCC)
+      - "7575-7577:7575-7577"
+    volumes:
+      # rendered config with injected DB password (ops/start.sh)
+      - ./config/config.dev.yaml:/opt/server/config.yaml
+      # hot-reloadable game data
+      - ../scripts:/opt/server/scripts
+      - ../wz:/opt/server/wz
+    environment:
+      DB_HOST: db
+
+volumes:
+  maple-dev-db:
+    name: maple-coop-dev-db

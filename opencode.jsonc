@@ -1,0 +1,95 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Project config for MapleStory Co-op Remix. V2 permission format:
+  // rules are evaluated in insertion order and the LAST matching rule wins,
+  // so broad allows come first and narrow ask/deny overrides come last.
+  "instructions": ["AGENTS.md"],
+  "permission": {
+    "edit": "allow",
+    "webfetch": "allow",
+    "external_directory": {
+      "*": "ask"
+    },
+    "bash": {
+      // --- broad baseline: local development autonomy ---
+      "*": "allow",
+
+      // --- ask: git write operations ---
+      "git commit*": "ask",
+      "git push*": "ask",
+      "git branch -D*": "ask",
+      "git checkout -- *": "ask",
+      "git restore .": "ask",
+      "git stash drop*": "ask",
+      "git stash clear*": "ask",
+
+      // --- deny: destructive git ---
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git push * --force*": "deny",
+      "git push * -f*": "deny",
+      "git reset --hard*": "deny",
+      "git clean -f*": "deny",
+      "git clean -d*": "deny",
+      "git filter-branch*": "deny",
+      "git update-ref -d*": "deny",
+
+      // --- ask: system / packages / services ---
+      "sudo*": "ask",
+      "apt*": "ask",
+      "apt-get*": "ask",
+      "snap*": "ask",
+      "systemctl*": "ask",
+      "shutdown*": "deny",
+      "reboot*": "deny",
+
+      // --- ask: remote access (VPS ops go through ops/*.sh with approval) ---
+      "ssh*": "ask",
+      "scp*": "ask",
+      "rsync*": "ask",
+
+      // --- ask: destructive docker / dev-DB operations ---
+      "docker compose down*": "ask",
+      "docker compose stop*": "ask",
+      "docker compose rm*": "ask",
+      "docker volume rm*": "ask",
+      "docker system prune*": "ask",
+      "docker rm *": "ask",
+      "docker rmi *": "ask",
+      "*DROP DATABASE*": "ask",
+      "*DROP SCHEMA*": "ask",
+
+      // --- ask: destructive ops scripts / deployments ---
+      "ops/reset-dev-db*": "ask",
+      "./ops/reset-dev-db*": "ask",
+      "ops/restore-dev-db*": "ask",
+      "./ops/restore-dev-db*": "ask",
+      "ops/deploy*": "ask",
+      "./ops/deploy*": "ask",
+      "ops/bootstrap-vps*": "ask",
+      "./ops/bootstrap-vps*": "ask",
+      "ops/dev-status*": "ask",
+      "ops/dev-logs*": "ask",
+
+      // --- ask/deny: deleting stuff ---
+      "rm -rf*": "ask",
+      "rm -fr*": "ask",
+      "rm -rf /*": "deny",
+      "rm -rf ~*": "deny",
+      "rm -rf $HOME*": "deny",
+
+      // --- deny: never dump/print secrets ---
+      "cat .env": "deny",
+      "cat .env.*": "deny",
+      "cat ops/.env": "deny",
+      "cat ops/.env.*": "deny",
+      "cat */.env": "deny",
+      "head .env*": "deny",
+      "head ops/.env*": "deny",
+      "tail ops/.env*": "deny",
+      "grep * ops/.env*": "deny",
+      "printenv DB_ROOT_PASSWORD*": "deny",
+      "echo $DB_ROOT_PASSWORD*": "deny"
+    }
+  }
+}

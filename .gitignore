@@ -24,3 +24,9 @@ database/docker-pg-db-data
 
 # macOS files
 .DS_Store
+
+# Co-op Remix dev environment
+.env
+ops/.env
+ops/config/
+ops/backups/
