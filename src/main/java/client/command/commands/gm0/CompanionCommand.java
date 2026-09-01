@@ -69,9 +69,34 @@ public class CompanionCommand extends Command {
                 }
                 report(player, controller.setMode(player, params[1]));
             }
+            case "loot" -> {
+                if (params.length < 2) {
+                    player.yellowMessage("Syntax: @companion loot <on|off>");
+                    return;
+                }
+                String flag = params[1].toLowerCase();
+                if (!flag.equals("on") && !flag.equals("off")) {
+                    player.yellowMessage("Syntax: @companion loot <on|off>");
+                    return;
+                }
+                report(player, controller.setLoot(player, flag.equals("on")));
+            }
+            case "equip" -> {
+                if (params.length < 3) {
+                    player.yellowMessage("Syntax: @companion equip <companion-equip-slot> <target-slot>");
+                    return;
+                }
+                try {
+                    int sourceSlot = Integer.parseInt(params[1]);
+                    short targetSlot = Short.parseShort(params[2]);
+                    report(player, controller.equip(player, sourceSlot, targetSlot));
+                } catch (NumberFormatException nfe) {
+                    player.yellowMessage("Syntax: @companion equip <companion-equip-slot> <target-slot>");
+                }
+            }
             case "status" -> player.yellowMessage(controller.status(player));
             default -> player.yellowMessage("Unknown subcommand: " + params[0]
-                    + ". Use bind|unbind|spawn|dismiss|mode|status.");
+                    + ". Use bind|unbind|spawn|dismiss|mode|loot|equip|status.");
         }
     }
 

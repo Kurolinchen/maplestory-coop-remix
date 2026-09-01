@@ -43,6 +43,7 @@ public final class CompanionTickScheduler {
     private final CompanionFollowController follow = new CompanionFollowController();
     private final CompanionCombatController combat = new CompanionCombatController();
     private final CompanionConsumableService consumables = new CompanionConsumableService();
+    private final CompanionLootController loot = new CompanionLootController();
 
     private volatile boolean running = false;
     private ScheduledFuture<?> task;
@@ -145,6 +146,9 @@ public final class CompanionTickScheduler {
         }
         combat.applyIncomingDamage(session, bot);
         combat.tick(session, bot);
+
+        // Slice E: opt-in looting, one item per pass at most.
+        loot.tick(session, bot);
 
         session.markTickCompleted();
     }

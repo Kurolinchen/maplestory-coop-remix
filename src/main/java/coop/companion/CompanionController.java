@@ -37,6 +37,7 @@ public final class CompanionController {
 
     private final CompanionManager manager = CompanionManager.getInstance();
     private final CompanionLifecycleService lifecycle = CompanionLifecycleService.getInstance();
+    private final CompanionEquipmentService equipment = new CompanionEquipmentService();
 
     private CompanionController() {
     }
@@ -211,6 +212,52 @@ public final class CompanionController {
         }
         return Outcome.ok("Companion mode set to " + mode.name()
                 + ". It will apply the next time you spawn the companion.");
+    }
+
+    /**
+     * Toggles companion looting for this binding. Looting stays opt-in because a
+     * bot vacuuming party loot makes group play worse; it is persisted so the
+     * choice survives a dismiss/spawn cycle.
+     */
+    public Outcome setLoot(Character owner, boolean enabled) {
+        if (CompanionBindingRepository.findByOwner(owner.getId()).isEmpty()) {
+            return Outcome.fail("No companion bound. Use @companion bind <character-name> first.");
+        }
+        Optional<CompanionSession> live = manager.findByOwner(owner.getId());
+        if (live.isPresent()) {
+            return Outcome.fail("Companion is active. Dismiss it before changing loot settings.");
+        }
+        CompanionBindingRepository.Binding current =
+                CompanionBindingRepository.findByOwner(owner.getId()).get();
+        boolean ok = lifecycle.persistMode(owner.getId(),
+                CompanionSession.Mode.parse(current.mode(), CompanionSession.Mode.PASSIVE),
+                enabled);
+        if (!ok) {
+            return Outcome.fail("Could not persist loot setting; check server logs.");
+        }
+        return Outcome.ok("Companion looting " + (enabled ? "enabled" : "disabled") + ".");
+    }
+
+    /**
+     * Owner-directed equip. Slice E deliberately has no automatic upgrade
+     * optimiser: every change goes through the normal wear validation path.
+     */
+    public Outcome equip(Character owner, int sourceSlot, short targetSlot) {
+        Optional<CompanionSession> live = manager.findByOwner(owner.getId());
+        if (live.isEmpty()) {
+            return Outcome.fail("You have no active companion.");
+        }
+        CompanionSession session = live.get();
+        Character bot = findCompanionCharacter(session);
+        if (bot == null) {
+            return Outcome.fail("Companion is not reachable right now.");
+        }
+        CompanionEquipmentService.EquipResult result =
+                equipment.equip(bot, sourceSlot, targetSlot);
+        if (!result.success()) {
+            return Outcome.fail(result.reason());
+        }
+        return Outcome.ok("Companion equipped slot " + sourceSlot + ".");
     }
 
     public String status(Character owner) {
