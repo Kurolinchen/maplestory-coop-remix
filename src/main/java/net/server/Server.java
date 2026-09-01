@@ -433,9 +433,10 @@ public class Server {
         int bossdroprate = YamlConfig.config.worlds.get(i).boss_drop_rate;
         int questrate = YamlConfig.config.worlds.get(i).quest_rate;
         int travelrate = YamlConfig.config.worlds.get(i).travel_rate;
-        // coop 0.1: fall back to the coop-scoped default if a world left travel_rate unset.
+        // coop 0.1b (Slice A.7, audit fix B11): read the fallback through CoopDefaults
+        // so the call is null-safe even when the coop: config block is absent.
         if (travelrate <= 0) {
-            travelrate = YamlConfig.config.coop.travel_rate_default;
+            travelrate = coop.config.CoopDefaults.travelRateDefault();
         }
         int fishingrate = YamlConfig.config.worlds.get(i).fishing_rate;
 

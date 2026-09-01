@@ -20,7 +20,7 @@ public class CoopConfig {
     public int default_inventory_slots = 32;
     public int default_storage_slots = 16;
     public int storage_slot_cap = 96;
-    public int travel_rate_default = 1;
+    public int travel_rate_default = 10;
     public int buddy_default_capacity = 50;
     public Map<String, Integer> expedition_min_size = new HashMap<>();
 }

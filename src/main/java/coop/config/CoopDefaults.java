@@ -75,4 +75,18 @@ public final class CoopDefaults {
     public static int buddyDefaultCapacity() {
         return buddyDefaultCapacity(cfg());
     }
+
+    /**
+     * Default world travel-rate fallback (higher = faster transports). The world
+     * config takes precedence; this is only used when a world leaves its
+     * travel_rate at the upstream default of 0. Clamped to a safe positive range
+     * so a missing/negative value still yields a usable transport timer.
+     */
+    public static int travelRateDefault(CoopConfig cfg) {
+        return clamp(cfg.travel_rate_default, 1, 1000);
+    }
+
+    public static int travelRateDefault() {
+        return travelRateDefault(cfg());
+    }
 }
