@@ -479,12 +479,16 @@ coop:
         enabled: true
         max_active_per_owner: 1           #One companion per owner in the MVP.
         max_active_per_account: 1         #One companion per account in the MVP.
-        #Level 1-30 Henesys progression chain (verified map names from
-        #wz/String.wz/Map.img.xml). An empty list would mean "no map eligible".
+        #Henesys-area maps for the 0.1b playtest. An empty list would mean
+        #"no map eligible". IMPORTANT: a map is only usable when
+        #  (a) it is listed here, (b) it is not an instanced/event/dojo range,
+        #  and (c) it runs NO onUserEnter / onFirstUserEnter script.
+        #Condition (c) matters because MapleMap.addPlayer executes entry scripts
+        #for the companion too, so spawn/hop cycles would repeat any reward
+        #those scripts grant. 100010000 and 100000003 both use
+        #onUserEnter=explorationPoint and are therefore deliberately excluded.
         allowed_map_ids:
             - 100000001                   # Henesys Townstreet (lv 1-5)
-            - 100010000                   # The Hill East of Henesys (lv 5-10)
-            - 100000003                   # Pig Park (lv 8-12)
             - 100000004                   # Pig Park II (lv 10-15)
             - 100020000                   # The Rain-Forest East of Henesys (lv 15-20)
             - 100030000                   # The Forest East of Henesys (lv 20-30)

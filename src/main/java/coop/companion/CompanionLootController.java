@@ -34,8 +34,6 @@ import server.maps.MapleMap;
 public final class CompanionLootController {
     private static final Logger log = LoggerFactory.getLogger(CompanionLootController.class);
 
-    private long lastLootAt = 0L;
-
     public record LootResult(int picked, int skipped, String reason) {
         public static LootResult none(String reason) {
             return new LootResult(0, 0, reason);
@@ -60,11 +58,10 @@ public final class CompanionLootController {
         if (map == null) {
             return LootResult.none("companion has no map");
         }
-        long now = System.currentTimeMillis();
-        if (now - lastLootAt < CoopDefaults.companionLootIntervalMs()) {
+        // Cooldown is per-session, never on the shared controller instance.
+        if (!session.tryLoot(CoopDefaults.companionLootIntervalMs())) {
             return LootResult.none("loot cooldown");
         }
-        lastLootAt = now;
 
         int radiusSq = CoopDefaults.companionLootRadius() * CoopDefaults.companionLootRadius();
         int picked = 0;

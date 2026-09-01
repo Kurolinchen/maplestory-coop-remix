@@ -6,6 +6,7 @@
 package coop.companion;
 
 import client.Character;
+import client.Stat;
 import net.server.world.Party;
 import net.server.world.PartyCharacter;
 import net.server.world.PartyOperation;
@@ -69,6 +70,18 @@ public final class CompanionLifecycleService {
         if (owner == null || session == null) {
             return Result.fail("owner or session missing");
         }
+        // Serialise against a concurrent dismiss coming from the command thread,
+        // the owner-disconnect hook or the tick loop. Without this, spawn and
+        // dismiss can interleave and leave a half-attached character.
+        session.lock().lock();
+        try {
+            return spawnLocked(owner, session);
+        } finally {
+            session.lock().unlock();
+        }
+    }
+
+    private Result spawnLocked(Character owner, CompanionSession session) {
         MapleMap map = owner.getMap();
         if (map == null) {
             return Result.fail("owner has no map");
@@ -151,8 +164,29 @@ public final class CompanionLifecycleService {
         if (session == null) {
             return Result.fail("session missing");
         }
-        session.compareAndSetState(CompanionSession.State.ACTIVE,
-                CompanionSession.State.DISMISSING);
+        // Only one thread may actually perform the dismissal. The CAS alone is
+        // not enough: three call paths (command, owner disconnect, tick) can
+        // arrive concurrently, and a second pass would repeat the party leave
+        // and the save while the first is still running.
+        session.lock().lock();
+        try {
+            if (session.state() == CompanionSession.State.CLOSED) {
+                return Result.ok(null); // already dismissed; idempotent
+            }
+            if (session.state() == CompanionSession.State.SAVE_FAILED) {
+                return Result.fail("a previous save failed; state is being held for retry");
+            }
+            if (!session.compareAndSetState(CompanionSession.State.ACTIVE,
+                    CompanionSession.State.DISMISSING)) {
+                return Result.fail("companion is not in a dismissable state: " + session.state());
+            }
+            return dismissLocked(session, bot);
+        } finally {
+            session.lock().unlock();
+        }
+    }
+
+    private Result dismissLocked(CompanionSession session, Character bot) {
 
         CompanionClient client = bot != null && bot.getClient() instanceof CompanionClient cc
                 ? cc : null;
@@ -186,7 +220,24 @@ public final class CompanionLifecycleService {
                         session.companionCharacterId(), e.getMessage());
             }
 
-            // 3) synchronous save (NOT the autosave variant: the object is about
+            // 3) a dead companion must not be persisted at 0 HP. Saving hp=0
+            //    bricks the character: the next spawn would immediately see
+            //    "not alive", dismiss again, and loop forever until someone
+            //    logs into the alt and heals it by hand. Restore to a safe
+            //    fraction of the pools first, exactly like a normal respawn.
+            if (bot.getHp() <= 0) {
+                try {
+                    // addHP/addMP are the public mutators; both clamp to the
+                    // character's max pools, so a single large heal is safe.
+                    bot.addHP(bot.getMaxHp());
+                    bot.addMP(bot.getMaxMp());
+                } catch (RuntimeException e) {
+                    log.warn("Could not restore companion HP/MP before save companion={}: {}",
+                            session.companionCharacterId(), e.getMessage());
+                }
+            }
+
+            // 4) synchronous save (NOT the autosave variant: the object is about
             //    to be discarded and a queued save could be lost)
             try {
                 bot.saveCharToDB(true);

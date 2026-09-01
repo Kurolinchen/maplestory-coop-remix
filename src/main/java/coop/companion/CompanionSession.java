@@ -54,6 +54,15 @@ public final class CompanionSession {
     private volatile String lastError;
     private final java.util.concurrent.locks.Lock lock = new java.util.concurrent.locks.ReentrantLock(true);
 
+    // Per-session action cooldowns. These MUST live here and not on the shared
+    // controller instances: a controller field would be shared by every active
+    // companion, capping total server-wide companion DPS instead of each bot's.
+    private volatile long lastAttackAt;
+    private volatile long lastIncomingAt;
+    private volatile long lastLootAt;
+    private volatile long lastConsumeAt;
+    private volatile long lastSaveAttemptAt;
+
     public CompanionSession(int ownerCharacterId, int companionCharacterId,
                            int accountId, int world, int channel,
                            Mode mode, boolean lootEnabled) {
@@ -96,6 +105,61 @@ public final class CompanionSession {
 
     public void markSaveCompleted() {
         lastSaveAt = System.currentTimeMillis();
+    }
+
+    // ---- per-session cooldown helpers -------------------------------------
+
+    /** True when at least {@code intervalMs} has passed since {@code lastAt}. */
+    private static boolean elapsed(long lastAt, long intervalMs) {
+        return System.currentTimeMillis() - lastAt >= intervalMs;
+    }
+
+    /** Marks an action as having just run and returns true if it was allowed. */
+    private static boolean tryAcquire(java.util.function.LongSupplier getter,
+                                      java.util.function.LongConsumer setter,
+                                      long intervalMs) {
+        long now = System.currentTimeMillis();
+        if (now - getter.getAsLong() < intervalMs) {
+            return false;
+        }
+        setter.accept(now);
+        return true;
+    }
+
+    public boolean tryAttack(long intervalMs) {
+        return tryAcquire(this::getLastAttackAt, this::setLastAttackAt, intervalMs);
+    }
+
+    public boolean tryIncomingDamage(long intervalMs) {
+        return tryAcquire(this::getLastIncomingAt, this::setLastIncomingAt, intervalMs);
+    }
+
+    public boolean tryLoot(long intervalMs) {
+        return tryAcquire(this::getLastLootAt, this::setLastLootAt, intervalMs);
+    }
+
+    public boolean tryConsume(long intervalMs) {
+        return tryAcquire(this::getLastConsumeAt, this::setLastConsumeAt, intervalMs);
+    }
+
+    public boolean trySave(long intervalMs) {
+        return tryAcquire(this::getLastSaveAttemptAt, this::setLastSaveAttemptAt, intervalMs);
+    }
+
+    public long getLastAttackAt() { return lastAttackAt; }
+    public void setLastAttackAt(long v) { lastAttackAt = v; }
+    public long getLastIncomingAt() { return lastIncomingAt; }
+    public void setLastIncomingAt(long v) { lastIncomingAt = v; }
+    public long getLastLootAt() { return lastLootAt; }
+    public void setLastLootAt(long v) { lastLootAt = v; }
+    public long getLastConsumeAt() { return lastConsumeAt; }
+    public void setLastConsumeAt(long v) { lastConsumeAt = v; }
+    public long getLastSaveAttemptAt() { return lastSaveAttemptAt; }
+    public void setLastSaveAttemptAt(long v) { lastSaveAttemptAt = v; }
+
+    /** True when the given action is still on cooldown. */
+    public boolean onCooldown(long lastAt, long intervalMs) {
+        return !elapsed(lastAt, intervalMs);
     }
 
     /** Snapshot for the @companion status command. */

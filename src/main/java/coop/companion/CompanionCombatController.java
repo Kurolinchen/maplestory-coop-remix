@@ -39,9 +39,6 @@ import java.util.List;
 public final class CompanionCombatController {
     private static final Logger log = LoggerFactory.getLogger(CompanionCombatController.class);
 
-    private long lastAttackAt = 0L;
-    private long lastIncomingAt = 0L;
-
     public record AttackResult(boolean attacked, String reason, int damage, Monster target) {
         public static AttackResult skipped(String reason) {
             return new AttackResult(false, reason, 0, null);
@@ -62,8 +59,9 @@ public final class CompanionCombatController {
         if (!bot.isAlive()) {
             return AttackResult.skipped("companion is dead");
         }
-        long now = System.currentTimeMillis();
-        if (now - lastAttackAt < CoopDefaults.companionAttackIntervalMs()) {
+        // Cooldown is per-session, never on the shared controller: a controller
+        // field would throttle ALL companions to one attack per interval.
+        if (!session.tryAttack(CoopDefaults.companionAttackIntervalMs())) {
             return AttackResult.skipped("attack cooldown");
         }
 
@@ -92,7 +90,6 @@ public final class CompanionCombatController {
         }
         consumeResources(bot, profile);
 
-        lastAttackAt = now;
         map.damageMonster(bot, target, damage);
         return AttackResult.hit(target, damage);
     }
@@ -170,8 +167,8 @@ public final class CompanionCombatController {
         if (!CoopDefaults.companionIncomingDamageEnabled() || bot == null || !bot.isAlive()) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (now - lastIncomingAt < CoopDefaults.companionIncomingDamageIntervalMs()) {
+        if (session == null
+                || !session.tryIncomingDamage(CoopDefaults.companionIncomingDamageIntervalMs())) {
             return;
         }
         MapleMap map = bot.getMap();
@@ -198,7 +195,6 @@ public final class CompanionCombatController {
         int attack = Math.max(1, nearest.getStats().getPADamage());
         int damage = (int) Math.ceil(attack * CoopDefaults.companionIncomingDamageMaxRatio());
         damage = Math.max(CoopDefaults.companionIncomingDamageMin(), damage);
-        lastIncomingAt = now;
         bot.addHP(-damage);
     }
 
@@ -241,24 +237,38 @@ public final class CompanionCombatController {
         return findAmmoSlot(bot, kind) >= 0;
     }
 
+    /**
+     * Finds the inventory slot holding usable ammunition of the given kind.
+     *
+     * <p>Uses the WZ-backed {@code ItemConstants} predicates rather than a
+     * hardcoded id list: an earlier revision listed 2061000 ("Arrow for
+     * Crossbow") as valid bow ammunition and omitted every upgraded arrow, so a
+     * bow user could consume bolts and any archer past the starter arrow
+     * silently stopped attacking.
+     */
     private int findAmmoSlot(Character bot, CompanionCombatProfile.AmmoKind kind) {
-        List<Integer> ids = switch (kind) {
-            case ARROW -> List.of(2060000, 2061000);
-            case BOLT -> List.of(2061000);
-            case BULLET -> List.of(2330000, 2330001, 2330002, 2330003, 2330004, 2330005, 2330006);
-            case STAR -> List.of(2070000, 2070001, 2070002, 2070003, 2070004,
-                    2070005, 2070006, 2070007, 2070008, 2070009,
-                    2070010, 2070011, 2070012, 2070013);
-            case NONE -> List.of();
-        };
-        if (ids.isEmpty()) {
+        if (kind == CompanionCombatProfile.AmmoKind.NONE) {
             return -1;
         }
         for (Item item : bot.getInventory(InventoryType.USE).list()) {
-            if (item != null && item.getQuantity() > 0 && ids.contains(item.getItemId())) {
+            if (item == null || item.getQuantity() <= 0) {
+                continue;
+            }
+            if (isAmmoOfKind(item.getItemId(), kind)) {
                 return item.getPosition();
             }
         }
         return -1;
+    }
+
+    /** Delegates to the authoritative WZ-backed item predicates. */
+    static boolean isAmmoOfKind(int itemId, CompanionCombatProfile.AmmoKind kind) {
+        return switch (kind) {
+            case ARROW -> constants.inventory.ItemConstants.isArrowForBow(itemId);
+            case BOLT -> constants.inventory.ItemConstants.isArrowForCrossBow(itemId);
+            case BULLET -> constants.inventory.ItemConstants.isBullet(itemId);
+            case STAR -> constants.inventory.ItemConstants.isThrowingStar(itemId);
+            case NONE -> false;
+        };
     }
 }

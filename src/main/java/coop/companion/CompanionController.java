@@ -76,14 +76,19 @@ public final class CompanionController {
         if (!isJobTierAllowed(check.companionJob())) {
             return Outcome.fail("Companion job is not supported yet (only first-job characters).");
         }
+        if (manager.isCompanionActive(companionCharacterId)
+                || isOnlineInWorld(check.world(), companionCharacterId)) {
+            return Outcome.fail("That character is currently in use. Log it out first.");
+        }
 
-        // Re-bind: replace the existing binding for this owner.
-        CompanionBindingRepository.delete(ownerId);
-        boolean ok = CompanionBindingRepository.insert(ownerId, companionCharacterId,
+        // Single upsert instead of delete-then-insert: the earlier revision
+        // deleted the owner's existing binding first, so a UNIQUE-constraint
+        // failure on the insert silently destroyed the previous binding.
+        boolean ok = CompanionBindingRepository.upsert(ownerId, companionCharacterId,
                 owner.getAccountID(), check.world(), CompanionSession.Mode.PASSIVE.name(),
                 CoopDefaults.companionLootEnabledDefault());
         if (!ok) {
-            return Outcome.fail("Binding failed; check server logs.");
+            return Outcome.fail("Binding failed; the character may already be bound to another owner.");
         }
         log.info("Companion bound: owner={} companion={} account={}",
                 ownerId, companionCharacterId, owner.getAccountID());
@@ -96,10 +101,18 @@ public final class CompanionController {
         if (live.isPresent()) {
             CompanionSession session = live.get();
             Character bot = findCompanionCharacter(session);
-            lifecycle.dismiss(session, bot);
-            manager.release(session);
+            CompanionLifecycleService.Result result = lifecycle.dismiss(session, bot);
+            if (result.success()) {
+                manager.release(session);
+                CompanionTickScheduler.getInstance().forgetTracker(ownerId);
+            } else {
+                return Outcome.fail("Could not dismiss the active companion: " + result.reason());
+            }
         }
-        CompanionBindingRepository.delete(ownerId);
+        boolean deleted = CompanionBindingRepository.delete(ownerId);
+        if (!deleted) {
+            return Outcome.fail("No companion binding to clear.");
+        }
         return Outcome.ok("Companion binding cleared.");
     }
 
@@ -139,12 +152,24 @@ public final class CompanionController {
         if (manager.isCompanionActive(b.companionCharacterId())) {
             return Outcome.fail("That companion is already active.");
         }
+        // A companion is loaded straight through Character.loadCharFromDB, so if
+        // the same character is ALSO logged in normally we would end up with two
+        // live Character objects for one DB row - last write wins, which loses
+        // items/meso/EXP or duplicates them on interleaved saves.
+        if (isOnlineInWorld(check.world(), b.companionCharacterId())) {
+            return Outcome.fail("That character is currently logged in. Log it out first.");
+        }
         if (!isJobTierAllowed(check.companionJob())) {
             return Outcome.fail("Companion job is not supported yet (only first-job characters).");
         }
         MapleMap map = owner.getMap();
         if (map == null || !isMapAllowed(map.getId())) {
             return Outcome.fail("Companions cannot be spawned on this map.");
+        }
+        // Entry scripts re-run for the bot on every spawn, which would turn
+        // spawn/dismiss cycles into a reward farm on scripted maps.
+        if (CompanionMapPolicy.hasEntryScript(map)) {
+            return Outcome.fail("This map runs an entry script; companions are not allowed here.");
         }
 
         CompanionSession session = new CompanionSession(ownerId, b.companionCharacterId(),
@@ -172,12 +197,17 @@ public final class CompanionController {
         }
         CompanionSession session = live.get();
         Character bot = findCompanionCharacter(session);
+        if (bot == null) {
+            return Outcome.fail("Companion is not reachable on this map; it could not be saved. "
+                    + "Move back to its map or let the server shut down cleanly.");
+        }
         CompanionLifecycleService.Result result = lifecycle.dismiss(session, bot);
         if (!result.success()) {
             // SAVE_FAILED: keep the session registered so state is retried.
             return Outcome.fail("Dismiss failed: " + result.reason());
         }
         manager.release(session);
+        CompanionTickScheduler.getInstance().forgetTracker(owner.getId());
         return Outcome.ok("Companion dismissed.");
     }
 
@@ -290,8 +320,15 @@ public final class CompanionController {
         }
         CompanionSession session = live.get();
         Character bot = findCompanionCharacter(session);
-        lifecycle.dismiss(session, bot);
+        CompanionLifecycleService.Result result = lifecycle.dismiss(session, bot);
+        if (!result.success()) {
+            // Hold the session in SAVE_FAILED rather than dropping the character.
+            log.error("Companion auto-dismiss failed owner={} companion={}: {}",
+                    owner.getId(), session.companionCharacterId(), result.reason());
+            return;
+        }
         manager.release(session);
+        CompanionTickScheduler.getInstance().forgetTracker(owner.getId());
         log.info("Companion auto-dismissed on owner disconnect: owner={}", owner.getId());
     }
 
@@ -304,10 +341,29 @@ public final class CompanionController {
             if (!result.success()) {
                 log.error("Companion shutdown save FAILED owner={} companion={}: {}",
                         session.ownerCharacterId(), session.companionCharacterId(), result.reason());
+                continue;
             }
             manager.release(session);
+            CompanionTickScheduler.getInstance().forgetTracker(session.ownerCharacterId());
         }
         log.info("Companion shutdown complete ({} remaining)", manager.activeOwnerCount());
+    }
+
+    /**
+     * Whether the character is currently logged in as a normal player in the
+     * given world. Used to refuse binding/spawning a character that already has
+     * a live session, which would otherwise create two savers for one row.
+     */
+    private boolean isOnlineInWorld(int world, int characterId) {
+        try {
+            net.server.world.World w = net.server.Server.getInstance().getWorld(world);
+            return w != null && w.getPlayerStorage().getCharacterById(characterId) != null;
+        } catch (RuntimeException e) {
+            // Conservative: if we cannot prove it is offline, refuse.
+            log.warn("Could not determine online state for character {}: {}",
+                    characterId, e.getMessage());
+            return true;
+        }
     }
 
     private int countActiveForAccount(int accountId) {
@@ -320,23 +376,48 @@ public final class CompanionController {
         return count;
     }
 
+    /**
+     * A map is eligible only when it is BOTH explicitly allowlisted AND not on
+     * the hard blocklist. The blocklist check is not redundant with the
+     * allowlist: operators extend `allowed_map_ids` by hand, and adding a PQ
+     * lobby, dojo or event field id would otherwise let a companion spawn into
+     * instanced content and satisfy a party-size check.
+     */
     private boolean isMapAllowed(int mapId) {
         java.util.List<Integer> allowed = CoopDefaults.companionAllowedMapIds();
-        return !allowed.isEmpty() && allowed.contains(mapId);
+        if (allowed.isEmpty() || !allowed.contains(mapId)) {
+            return false;
+        }
+        return !CompanionMapPolicy.isBlocked(mapId);
+    }
+
+    /**
+     * Whether the job's ADVANCEMENT TIER is within the configured limit.
+     *
+     * <p>MapleStory job ids encode both the class family and the advancement
+     * tier: the last two digits are the branch/tier code.
+     * <pre>
+     *   100  -> 0   -> tier 1 (Warrior, Magician, Bowman, Thief, Pirate,
+     *                          Noblesse, DawnWarrior1, ..., Evan1)
+     *   110/120/130 -> 10/20/30 -> tier 2 (Fighter/Page/Spearman, ...)
+     *   111/121/131 -> tier 3,  112/122/132 -> tier 4
+     * </pre>
+     * The earlier implementation used {@code (jobId % 1000) / 100}, which is the
+     * FAMILY digit, not the tier: with a limit of 1 it admitted only Warrior
+     * (100) and Dawn Warrior (1100) and silently rejected Magician, Bowman,
+     * Thief, Pirate and every other Cygnus/Legend first job.
+     */
+    static boolean isJobTierWithinLimit(int jobId, int tierLimit) {
+        if (jobId <= 0 || tierLimit < 1) {
+            return false;
+        }
+        int branch = jobId % 100;
+        int tier = (branch == 0) ? 1 : (branch % 10) + 2;
+        return tier <= tierLimit;
     }
 
     private boolean isJobTierAllowed(int jobId) {
-        // Tier 1 = first job (100..599, 1100..1599 range covers explorers + cygnus);
-        // beginner (job 0) and any higher tier are rejected in the MVP.
-        int tier = CoopDefaults.companionAllowedJobTier();
-        if (tier < 1) {
-            return false;
-        }
-        if (jobId <= 0) {
-            return false;
-        }
-        int jobTier = (jobId % 1000) / 100;
-        return jobTier <= tier;
+        return isJobTierWithinLimit(jobId, CoopDefaults.companionAllowedJobTier());
     }
 
     /**

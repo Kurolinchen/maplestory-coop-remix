@@ -130,6 +130,12 @@ public final class CompanionFollowController {
         if (destination == null || destination.getId() != toMapId) {
             return TickResult.dismiss("owner map mismatch");
         }
+        // A scripted destination would re-run its entry script for the bot on
+        // every hop, so refuse instead of following.
+        if (CompanionMapPolicy.hasEntryScript(destination)) {
+            return TickResult.dismiss(
+                    "owner's map runs an entry script; companions cannot follow there");
+        }
 
         // Find a static, scriptless portal in the map we just left whose target
         // is the owner's new map.

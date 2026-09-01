@@ -40,6 +40,38 @@ public final class CompanionMapPolicy {
     }
 
     /**
+     * Whether a map runs a script when a character enters it.
+     *
+     * <p>{@code MapleMap.addPlayer} executes {@code onFirstUserEnter} and
+     * {@code onUserEnter}. A companion is attached through that same method, so
+     * allowing a scripted map means every spawn AND every portal-follow hop
+     * re-runs the script for the bot. Some entry scripts grant progress
+     * (e.g. {@code explorationPoint} -> quest 29005), which turns repeated
+     * spawn/dismiss cycles into a reward farm. Companion maps must therefore be
+     * script-free.
+     */
+    public static boolean hasEntryScript(server.maps.MapleMap map) {
+        if (map == null) {
+            return false;
+        }
+        String onEnter = map.getOnUserEnter();
+        String onFirstEnter = map.getOnFirstUserEnter();
+        return (onEnter != null && !onEnter.isEmpty())
+                || (onFirstEnter != null && !onFirstEnter.isEmpty());
+    }
+
+    /**
+     * Whether a companion may be attached to this actual map instance: the id
+     * must be eligible AND the map must not run entry scripts.
+     */
+    public static boolean canHost(server.maps.MapleMap map) {
+        if (map == null) {
+            return false;
+        }
+        return !isBlocked(map.getId()) && !hasEntryScript(map);
+    }
+
+    /**
      * True for map-id ranges that must never host a companion: event/PQ
      * instances, boss maps, dojo, and other instanced content where an extra
      * body could satisfy a party-size check or duplicate a reward.

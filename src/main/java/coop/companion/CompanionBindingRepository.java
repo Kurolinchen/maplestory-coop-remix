@@ -58,11 +58,23 @@ public final class CompanionBindingRepository {
         }
     }
 
-    public static boolean insert(int ownerCharacterId, int companionCharacterId,
+    /**
+     * Atomically inserts or replaces the binding for an owner.
+     *
+     * <p>An upsert is required because the earlier delete-then-insert sequence
+     * was non-atomic: if the insert hit the UNIQUE constraint on
+     * {@code companion_character_id} (the alt already bound to another of the
+     * owner's characters), the previous binding had already been deleted and the
+     * player simply lost it.
+     */
+    public static boolean upsert(int ownerCharacterId, int companionCharacterId,
                                  int accountId, int world, String mode, boolean lootEnabled) {
         String sql = "INSERT INTO coop_companion_bindings "
                 + "(owner_character_id, companion_character_id, account_id, world, mode, loot_enabled) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
+                + "VALUES (?, ?, ?, ?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE companion_character_id = VALUES(companion_character_id), "
+                + "account_id = VALUES(account_id), world = VALUES(world), "
+                + "mode = VALUES(mode), loot_enabled = VALUES(loot_enabled)";
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setInt(1, ownerCharacterId);
@@ -71,20 +83,24 @@ public final class CompanionBindingRepository {
             ps.setInt(4, world);
             ps.setString(5, mode);
             ps.setBoolean(6, lootEnabled);
-            return ps.executeUpdate() == 1;
+            ps.executeUpdate();
+            return true;
         } catch (SQLException e) {
-            log.error("Failed to insert companion binding owner={} companion={}",
+            log.error("Failed to upsert companion binding owner={} companion={}",
                     ownerCharacterId, companionCharacterId, e);
             return false;
         }
     }
 
+    /** Deletes the binding. Returns false when nothing was deleted. */
     public static boolean delete(int ownerCharacterId) {
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(
                      "DELETE FROM coop_companion_bindings WHERE owner_character_id = ?")) {
             ps.setInt(1, ownerCharacterId);
-            return ps.executeUpdate() >= 0;
+            // executeUpdate() >= 0 is always true, which made every delete look
+            // successful; report the actual row count instead.
+            return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             log.error("Failed to delete companion binding for owner {}", ownerCharacterId, e);
             return false;
@@ -92,10 +108,16 @@ public final class CompanionBindingRepository {
     }
 
     /**
-     * Verifies that owner + companion are real characters on the same account,
-     * that owner and companion are different ids, and that the companion is
-     * currently offline (not in world/channel storage). This is the only safe
+     * Verifies that owner + companion are real characters on the same account
+     * and the same world, and that they are different ids. This is the only safe
      * way to confirm ownership for {@link #insert}.
+     *
+     * <p>The OFFLINE check is deliberately NOT here: a companion is never
+     * registered in {@code PlayerStorage}, so the repository cannot see it, and
+     * the in-process {@link CompanionManager} is the right place for that.
+     * Callers must additionally consult
+     * {@code CompanionManager.isCompanionActive / isOwnerActive} and the world's
+     * player storage before spawning (see {@link CompanionController#spawn}).
      */
     public static OwnershipCheckResult verifyOwnership(int ownerAccountId, int ownerCharacterId,
                                                       int companionCharacterId) {

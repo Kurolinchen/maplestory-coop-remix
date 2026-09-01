@@ -97,6 +97,18 @@ public final class CompanionTickScheduler {
     }
 
     private void tickSession(CompanionSession session) {
+        // Hold the session lock across the whole tick so a concurrent dismiss
+        // (command thread / owner disconnect) cannot read or save the bot's
+        // inventories while we are mutating them.
+        session.lock().lock();
+        try {
+            tickSessionLocked(session);
+        } finally {
+            session.lock().unlock();
+        }
+    }
+
+    private void tickSessionLocked(CompanionSession session) {
         Character owner = resolveOwner(session);
         if (owner == null) {
             session.recordTickFailure("owner not resolvable");
@@ -122,9 +134,7 @@ public final class CompanionTickScheduler {
             if (CoopDefaults.companionDeathDismiss()) {
                 log.info("Companion died; dismissing owner={} companion={}",
                         session.ownerCharacterId(), session.companionCharacterId());
-                manager.release(session);
-                trackers.remove(session.ownerCharacterId());
-                CompanionLifecycleService.getInstance().dismiss(session, bot);
+                releaseSession(session, bot);
             }
             return;
         }
@@ -133,9 +143,7 @@ public final class CompanionTickScheduler {
         if (result.dismissed()) {
             log.info("Companion follow dismissing owner={} companion={}: {}",
                     session.ownerCharacterId(), session.companionCharacterId(), result.reason());
-            manager.release(session);
-            trackers.remove(session.ownerCharacterId());
-            CompanionLifecycleService.getInstance().dismiss(session, bot);
+            releaseSession(session, bot);
             return;
         }
 
@@ -151,6 +159,41 @@ public final class CompanionTickScheduler {
         loot.tick(session, bot);
 
         session.markTickCompleted();
+    }
+
+    /**
+     * Saves the companion and only then releases its slot.
+     *
+     * <p>Ordering matters: an earlier revision called {@code manager.release}
+     * before the save, so a failing save left the session unregistered (nothing
+     * would retry it) while the bot had already been pulled from map and party,
+     * and the slot was free for a second spawn of the same character row.
+     *
+     * <p>The stale {@link CompanionFollowController.OwnerTracker} is also
+     * cleared here and in every other release path; leaving it behind made the
+     * next spawn on a different map look like a map transition and self-dismiss
+     * about half a second after "companion spawned".
+     */
+    private void releaseSession(CompanionSession session, Character bot) {
+        CompanionLifecycleService.Result result =
+                CompanionLifecycleService.getInstance().dismiss(session, bot);
+        if (!result.success()) {
+            // Keep the session registered in SAVE_FAILED so the state is retried
+            // rather than dropped.
+            log.error("Companion dismiss failed owner={} companion={}: {}",
+                    session.ownerCharacterId(), session.companionCharacterId(), result.reason());
+            return;
+        }
+        manager.release(session);
+        trackers.remove(session.ownerCharacterId());
+    }
+
+    /**
+     * Drops the follow tracker for an owner. Called from every release path so a
+     * stale tracker cannot make the next spawn look like a map transition.
+     */
+    public void forgetTracker(int ownerCharacterId) {
+        trackers.remove(ownerCharacterId);
     }
 
     private Character resolveOwner(CompanionSession session) {

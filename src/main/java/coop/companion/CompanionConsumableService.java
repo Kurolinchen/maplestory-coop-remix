@@ -67,11 +67,25 @@ public final class CompanionConsumableService {
         if (potion == null) {
             return ConsumeResult.skipped("no usable potion in inventory");
         }
-        // Remove exactly one from the stack through the standard manipulator,
-        // then apply the item's own effect (same path a player click would take).
+        int itemId = potion.getItemId();
+
+        // Apply the item's OWN effect FIRST. If the effect cannot be applied we
+        // must not destroy the item: an earlier revision removed the potion and
+        // only logged, which burned the companion's entire stack once per tick
+        // without ever healing it.
+        server.StatEffect effect =
+                server.ItemInformationProvider.getInstance().getItemEffect(itemId);
+        if (effect == null) {
+            return ConsumeResult.skipped("potion " + itemId + " has no usable effect");
+        }
+        if (!effect.applyTo(bot)) {
+            return ConsumeResult.skipped("potion " + itemId + " effect was rejected");
+        }
+
+        // Only now remove exactly one from the stack, through the standard
+        // manipulator, so the item and its effect stay in lockstep.
         InventoryManipulator.removeFromSlot(bot.getClient(), InventoryType.USE,
                 (byte) potion.getPosition(), (short) 1, false);
-        int itemId = potion.getItemId();
         log.debug("Companion {} used potion {}", bot.getId(), itemId);
         return ConsumeResult.used(itemId);
     }
