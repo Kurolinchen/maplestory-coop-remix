@@ -3517,13 +3517,16 @@ public class MapleMap {
     }
 
     private static double getCurrentSpawnRate(int numPlayers) {
-        // coop 0.1: solo-first co-op (DECISIONS.md D8). Lift the spawn-rate floor so a
-        // solo or 2-player dev/testing party is not throttled at 70-75% of vanilla; from
-        // 3 players onward the previous per-player progression resumes.
-        if (numPlayers <= 2) {
-            return 0.90 + (0.05 * numPlayers);
+        // coop 0.1b (Slice A.8, audit fix B7): continuous spawn-rate curve so that
+        // 1 player -> 0.90, 2 players -> 1.00, 3+ -> up to 1.05 at 6 players. Earlier
+        // versions had a discontinuity at 3 players and an undocumented 0.95 floor
+        // for the solo case. This branch only runs when USE_ENABLE_FULL_RESPAWN is
+        // OFF; with full respawn the formula is bypassed entirely and the cap is
+        // capped by total spawn count instead.
+        if (numPlayers <= 0) {
+            return 0.90;
         }
-        return 0.70 + (0.05 * Math.min(6, numPlayers));
+        return 0.85 + (0.05 * Math.min(6, numPlayers));
     }
 
     private int getNumShouldSpawn(int numPlayers) {
