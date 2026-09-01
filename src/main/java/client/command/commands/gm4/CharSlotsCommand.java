@@ -3,6 +3,11 @@
     provided under the GNU Affero General Public License version 3 as published
     by the Free Software Foundation.
 */
+/*
+    This file is part of the MapleStory Co-op Remix server (Cosmic v83 base),
+    provided under the GNU Affero General Public License version 3 as published
+    by the Free Software Foundation.
+*/
 package client.command.commands.gm4;
 
 import client.Character;
@@ -27,21 +32,36 @@ public class CharSlotsCommand extends Command {
             return;
         }
 
-        int slots;
+        int requested;
         try {
-            slots = Integer.parseInt(params[0]);
+            requested = Integer.parseInt(params[0]);
         } catch (NumberFormatException nfe) {
             player.yellowMessage("Syntax: !charslots <amount>");
             return;
         }
 
-        slots = CoopDefaults.clamp(slots, 1, 127);
+        // coop 0.1b (Slice A.5, audit fix B5): clamp against the configured cap, not
+        // the hard 1..127 range, so the GM command honours coop.max_character_slots
+        // and never silently allows buying past the cap.
+        int cap = CoopDefaults.maxCharacterSlots();
+        int slots = CoopDefaults.clamp(requested, 1, cap);
+
         // never below the number of characters the account already owns
         int owned = Server.getInstance().getAccountCharacterCount(c.getAccID());
         if (slots < owned) {
             slots = owned;
         }
-        c.setCharacterSlotsPersistent(slots);
+
+        if (requested > cap) {
+            player.yellowMessage("Requested value " + requested
+                    + " is above coop.max_character_slots (" + cap + "); clamped.");
+        }
+
+        boolean ok = c.setCharacterSlotsPersistent(slots);
+        if (!ok) {
+            player.yellowMessage("Failed to persist character slot update; check server logs.");
+            return;
+        }
         c.sendPacket(PacketCreator.showBoughtCharacterSlot((short) slots));
         player.yellowMessage("Character slots set to " + slots + ".");
     }

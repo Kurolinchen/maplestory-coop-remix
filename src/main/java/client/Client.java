@@ -1403,19 +1403,26 @@ public class Client extends ChannelInboundHandlerAdapter {
     /**
      * coop 0.1: GM/dev tooling sets an exact slot count (persisted), unlike
      * {@link #gainCharacterSlot()} which only increments by one.
+     *
+     * <p>coop 0.1b (Slice A.5, audit fix B5): returns a boolean indicating whether
+     * the in-memory state was actually updated. Callers must check the result so
+     * a failed SQL update does not silently report success.
      */
-    public synchronized void setCharacterSlotsPersistent(int slots) {
+    public synchronized boolean setCharacterSlotsPersistent(int slots) {
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement("UPDATE accounts SET characterslots = ? WHERE id = ?")) {
             ps.setInt(1, slots);
             ps.setInt(2, accId);
             if (ps.executeUpdate() > 0) {
                 this.characterSlots = (byte) slots;
-            } else {
-                log.warn("Could not persist character slot count {} for account {}", slots, accId);
+                return true;
             }
+            log.warn("Could not persist character slot count {} for account {} (no rows updated)",
+                    slots, accId);
+            return false;
         } catch (SQLException e) {
             log.error("Failed to persist character slot count {} for account {}", slots, accId, e);
+            return false;
         }
     }
 
