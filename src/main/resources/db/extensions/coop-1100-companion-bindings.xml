@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Slice B, Companion Bot MVP):
+        Persistent owner -> companion binding. The companion character itself
+        is a normal characters row (no separate bot table); the binding is the
+        only server-side state that distinguishes a bot from a regular alt.
+
+        Owner is the PK (one companion per owner). Companion id is UNIQUE so
+        the same character cannot be bound to two owners. Both FKs cascade
+        delete so character cleanup stays consistent.
+
+        account_id / world are denormalised for audit efficiency; runtime
+        ownership checks always re-verify against characters.accountid and
+        characters.world before acting on a binding.
+    -->
+    <changeSet id="coop-1100" author="coop">
+        <comment>Co-op Remix 0.1b: persistent owner -> companion binding table.</comment>
+
+        <createTable tableName="coop_companion_bindings">
+            <column name="owner_character_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="companion_character_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="world" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mode" type="VARCHAR(16)" defaultValue="PASSIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="loot_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="coop_companion_bindings"
+                       columnNames="owner_character_id"
+                       constraintName="pk_coop_companion_bindings"/>
+
+        <addUniqueConstraint tableName="coop_companion_bindings"
+                             columnNames="companion_character_id"
+                             constraintName="uq_coop_companion_companion"/>
+
+        <addForeignKeyConstraint baseTableName="coop_companion_bindings"
+                                 baseColumnNames="owner_character_id"
+                                 referencedTableName="characters"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_coop_companion_owner"
+                                 onDelete="CASCADE"/>
+
+        <addForeignKeyConstraint baseTableName="coop_companion_bindings"
+                                 baseColumnNames="companion_character_id"
+                                 referencedTableName="characters"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_coop_companion_companion"
+                                 onDelete="CASCADE"/>
+
+        <sql>CREATE INDEX ix_coop_companion_account_world ON coop_companion_bindings (account_id, world);</sql>
+    </changeSet>
+</databaseChangeLog>
