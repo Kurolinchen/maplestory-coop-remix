@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Slice A.2, audit fix B2):
+        coop-1012 seeded the wrong item categories for lv1-30 ammo / scrolls /
+        summon rocks. To preserve Liquibase checksums (coop-1012 is already
+        applied on the DEV volume), this changeset deletes those mislabeled rows
+        and inserts the correct IDs verified against wz/String.wz.
+
+        Verified IDs (wz/String.wz/Consume.img.xml / Etc.img.xml):
+          2060000  Arrow for Bow
+          2061000  Arrow for Crossbow
+          2070000..2070013  Throwing Stars
+          2330000..2330006  Bullets (incl. Novice Pirate bullet)
+          2340000  White Scroll
+          4006000  Magic Rock
+          4006001  Summoning Rock
+          4010000..4010007  Ores
+          4000000..4000003  Early monster drops (snail shell, mushroom cap, etc.)
+    -->
+    <changeSet id="coop-1031" author="coop">
+        <comment>Co-op Remix 0.1b: correct misclassified stack overrides from coop-1012 and add verified Bullets / White Scroll / Magic/Summoning Rock entries.</comment>
+
+        <!-- Delete rows that coop-1012 inserted under wrong category names. -->
+        <sql>DELETE FROM coop_stack_overrides WHERE item_id IN
+               (2100000, 2100001, 2100002,
+                4001000, 4001001, 4001002, 4001010, 4001011, 4001012);</sql>
+
+        <!-- 2070000..2070013 are correct; re-assert they remain at 1000 per slot. -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2070000, 1000), (2070001, 1000), (2070002, 1000), (2070003, 1000),
+               (2070004, 1000), (2070005, 1000), (2070006, 1000), (2070007, 1000),
+               (2070008, 1000), (2070009, 1000), (2070010, 1000), (2070011, 1000),
+               (2070012, 1000), (2070013, 1000);</sql>
+
+        <!-- Bullet IDs (gunslinger), 1000 per slot. -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2330000, 1000), (2330001, 1000), (2330002, 1000), (2330003, 1000),
+               (2330004, 1000), (2330005, 1000), (2330006, 1000);</sql>
+
+        <!-- White Scroll (GMS verified ID 2340000) at 100 per slot. -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2340000, 100);</sql>
+
+        <!-- Summoning / Magic Rocks (GMS verified IDs 4006000, 4006001). -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (4006000, 100), (4006001, 100);</sql>
+
+        <!-- Arrows / Crossbow bolts at 1000 per slot. -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2060000, 1000), (2061000, 1000);</sql>
+
+        <!-- Ores (idempotent in case coop-1012 was already applied). -->
+        <sql>INSERT IGNORE INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (4010000, 500), (4010001, 500), (4010002, 500), (4010003, 500),
+               (4010004, 500), (4010005, 500), (4010006, 500), (4010007, 500);</sql>
+    </changeSet>
+</databaseChangeLog>
