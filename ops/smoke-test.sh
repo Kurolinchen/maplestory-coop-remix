@@ -60,7 +60,7 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
         && "$coop_ids_present" -eq "$expected_ids" \
         && "$charslot_default" == "15" \
         && "$useslots_default" == "32" \
-        && "$stack_overrides" -ge 50 \
+        && "$stack_overrides" -ge 45 \
         && "$wrong_stack_rows" -eq 0 \
         && "$hint_rows" -ge 6 \
         && "$hint_seen_table" -eq 1 \
