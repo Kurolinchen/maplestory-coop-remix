@@ -6480,7 +6480,9 @@ public class Character extends AbstractCharacterObject {
         }
 
         // coop 0.1: deliver milestone onboarding hints for the levels we just crossed.
-        for (coop.onboarding.MilestoneHints.HintEntry hint : coop.onboarding.MilestoneHints.forLevel(level)) {
+        // coop 0.1b (Slice A.6, audit fix B6): pass the current job id so class-aware
+        // hints reach the right players and general hints still fire for everyone.
+        for (coop.onboarding.MilestoneHints.HintEntry hint : coop.onboarding.MilestoneHints.forLevel(level, job.getId())) {
             if (hint.minLevel() < level) {
                 continue; // only trigger when the level *crosses* the threshold
             }

@@ -47,11 +47,15 @@ class CharacterHintStateTest {
         return tree;
     }
 
+    private static MilestoneHints.HintEntry e(String id, int lvl, String txt) {
+        return new MilestoneHints.HintEntry(id, lvl, txt, java.util.Set.of());
+    }
+
     @Test
     void sameLevelEntriesAreOrderedById() {
         NavigableMap<Integer, List<MilestoneHints.HintEntry>> tree = bucket(
-                new MilestoneHints.HintEntry("b", 10, "second"),
-                new MilestoneHints.HintEntry("a", 10, "first"));
+                e("b", 10, "second"),
+                e("a", 10, "first"));
 
         List<MilestoneHints.HintEntry> flat = new ArrayList<>();
         for (List<MilestoneHints.HintEntry> bucket : tree.headMap(10, true).values()) {
@@ -70,9 +74,9 @@ class CharacterHintStateTest {
     @Test
     void differentLevelEntriesStayOrdered() {
         NavigableMap<Integer, List<MilestoneHints.HintEntry>> tree = bucket(
-                new MilestoneHints.HintEntry("late", 30, "late"),
-                new MilestoneHints.HintEntry("early", 10, "early"),
-                new MilestoneHints.HintEntry("mid", 20, "mid"));
+                e("late", 30, "late"),
+                e("early", 10, "early"),
+                e("mid", 20, "mid"));
 
         List<MilestoneHints.HintEntry> flat = new ArrayList<>();
         for (List<MilestoneHints.HintEntry> bucket : tree.headMap(30, true).values()) {
@@ -90,8 +94,8 @@ class CharacterHintStateTest {
         // computeIfAbsent so two rows at the same min_level coexist.
         NavigableMap<Integer, List<MilestoneHints.HintEntry>> tree = new TreeMap<>();
         for (int i = 0; i < 3; i++) {
-            MilestoneHints.HintEntry e = new MilestoneHints.HintEntry("h" + i, 10, "x");
-            tree.computeIfAbsent(e.minLevel(), k -> new ArrayList<>()).add(e);
+            MilestoneHints.HintEntry h = e("h" + i, 10, "x");
+            tree.computeIfAbsent(h.minLevel(), k -> new ArrayList<>()).add(h);
         }
         assertEquals(1, tree.size(), "still one bucket key");
         assertEquals(3, tree.get(10).size(), "all three entries preserved in the bucket");

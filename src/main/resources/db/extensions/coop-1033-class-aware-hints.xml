@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Slice A.6, audit fix B6):
+        Milestone hints previously gave every class the same wrong directions
+        ("Dances with Balrog in Henesys", "second job instructor in Sleepywood").
+        We now add a job_filter column and class-specific guidance rows.
+
+        job_filter semantics:
+          NULL  / ''   -> applies to every job (default)
+          '100,1100'   -> applies only when Character.getJob().getId() is in the set
+        The loader joins this column against the player's job id so a Warrior
+        sees Perion, a Magician sees Ellinia, etc.
+    -->
+    <changeSet id="coop-1033" author="coop">
+        <comment>Co-op Remix 0.1b: extend coop_milestone_hints with job_filter and seed class-aware guidance rows.</comment>
+
+        <addColumn tableName="coop_milestone_hints">
+            <column name="job_filter" type="VARCHAR(64)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <sql>UPDATE coop_milestone_hints SET job_filter = '' WHERE job_filter IS NULL;</sql>
+
+        <!-- Drop the misleading shared rows inserted by coop-1020 -->
+        <sql>DELETE FROM coop_milestone_hints WHERE id IN ('first-job-adventurer', 'second-job');</sql>
+
+        <!-- Common (no job filter): first job advancement general reminder -->
+        <sql>INSERT INTO coop_milestone_hints (id, min_level, hint_text, job_filter) VALUES
+               ('first-job-adventurer', 10,
+                'Tip: visit your class''s job instructor for your first job advancement. They can be found in Henesys (Bowman), Perion (Warrior), Ellinia (Magician), Kerning City (Thief) or Nautilus Harbor (Pirate).',
+                '');</sql>
+
+        <!-- per-class second-job advancement, level 30 -->
+        <sql>INSERT INTO coop_milestone_hints (id, min_level, hint_text, job_filter) VALUES
+               ('second-job-warrior',    30, 'Tip: as a Warrior, return to Dances with Balrog in Perion for your second job advancement.', '100,1100,1110,1111,1112'),
+               ('second-job-magician',   30, 'Tip: as a Magician, return to Grendel the Really Old in Ellinia for your second job advancement.', '200,1200,1210,1211,1212'),
+               ('second-job-bowman',     30, 'Tip: as a Bowman, return to Athena Pierce in Henesys for your second job advancement.', '300,1300,1310,1311,1312'),
+               ('second-job-thief',      30, 'Tip: as a Thief, return to Dark Lord in Kerning City for your second job advancement.', '400,1400,1410,1411,1412'),
+               ('second-job-pirate',     30, 'Tip: as a Pirate, return to Kyrin in Nautilus Harbor for your second job advancement.', '500,1500,1510,1511,1512');</sql>
+
+        <!-- keep the storage-available general hint; ensure it stays unfiltered -->
+        <sql>UPDATE coop_milestone_hints SET hint_text = 'Tip: storage is now usable. Find a Storage NPC in any major town (lv 15+).' WHERE id = 'storage-available';</sql>
+    </changeSet>
+</databaseChangeLog>
