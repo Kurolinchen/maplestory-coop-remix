@@ -133,25 +133,30 @@ public class Storage {
         }
     }
 
-    public void saveToDB(Connection con) {
-        try {
-            try (PreparedStatement ps = con.prepareStatement("UPDATE storages SET slots = ?, meso = ? WHERE storageid = ?")) {
-                ps.setInt(1, slots);
-                ps.setInt(2, meso);
-                ps.setInt(3, id);
-                ps.executeUpdate();
-            }
-            List<Pair<Item, InventoryType>> itemsWithType = new ArrayList<>();
-
-            List<Item> list = getItems();
-            for (Item item : list) {
-                itemsWithType.add(new Pair<>(item, item.getInventoryType()));
-            }
-
-            ItemFactory.STORAGE.saveItems(itemsWithType, id, con);
-        } catch (SQLException ex) {
-            ex.printStackTrace();
+    /**
+     * Persist storage slots, meso and items under the caller's transaction.
+     *
+     * <p>Slice A.3 (audit fix B8): failures are no longer swallowed. The caller
+     * MUST be inside a JDBC transaction; an SQL failure propagates so the
+     * outer save rolls back consistently with the character and inventory
+     * rows. This prevents the previous behaviour where storage mutations could
+     * diverge from the rest of the character snapshot.
+     */
+    public void saveToDB(Connection con) throws SQLException {
+        try (PreparedStatement ps = con.prepareStatement("UPDATE storages SET slots = ?, meso = ? WHERE storageid = ?")) {
+            ps.setInt(1, slots);
+            ps.setInt(2, meso);
+            ps.setInt(3, id);
+            ps.executeUpdate();
         }
+        List<Pair<Item, InventoryType>> itemsWithType = new ArrayList<>();
+
+        List<Item> list = getItems();
+        for (Item item : list) {
+            itemsWithType.add(new Pair<>(item, item.getInventoryType()));
+        }
+
+        ItemFactory.STORAGE.saveItems(itemsWithType, id, con);
     }
 
     public Item getItem(byte slot) {

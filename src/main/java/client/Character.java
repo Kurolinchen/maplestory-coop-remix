@@ -8655,6 +8655,8 @@ public class Character extends AbstractCharacterObject {
 
                 if (storage != null && usedStorage) {
                     storage.saveToDB(con);
+                    // clear the dirty flag only after a successful save so a rolled-back
+                    // transaction does not silently leave storage unsaved.
                     usedStorage = false;
                 }
 
