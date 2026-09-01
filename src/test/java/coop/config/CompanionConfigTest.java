@@ -29,22 +29,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CompanionConfigTest {
 
     @Test
-    void featureIsDisabledByDefault() {
+    void featureIsDisabledByJavaFieldDefault() {
+        // This asserts the JAVA default, not whatever config.yaml currently
+        // enables for a playtest: if the coop: block is absent, the server must
+        // still come up with companions off.
         CoopConfig cfg = new CoopConfig();
         assertFalse(cfg.companion.enabled, "companions must be disabled by default");
-        assertFalse(CoopDefaults.companionEnabled());
     }
 
     @Test
     void emptyAllowedMapListMeansNoMapEligible() {
-        CoopConfig cfg = new CoopConfig();
-        cfg.companion.allowed_map_ids = List.of();
-        assertTrue(CoopDefaults.companionAllowedMapIds().isEmpty(),
+        // Policy-level check: an empty allowlist makes NO map eligible. The
+        // accessor is pure, so we can assert it without the live config.
+        CoopConfig empty = new CoopConfig();
+        empty.companion.allowed_map_ids = List.of();
+        assertTrue(CoopDefaults.companionAllowedMapIds(empty).isEmpty(),
                 "an empty allowlist must mean 'no map', never 'all maps'");
 
-        CoopConfig cfg2 = new CoopConfig();
-        cfg2.companion.allowed_map_ids = null;
-        assertTrue(CoopDefaults.companionAllowedMapIds().isEmpty(),
+        CoopConfig nullList = new CoopConfig();
+        nullList.companion.allowed_map_ids = null;
+        assertTrue(CoopDefaults.companionAllowedMapIds(nullList).isEmpty(),
                 "a null allowlist must degrade to an empty allowlist");
     }
 

@@ -474,10 +474,20 @@ coop:
     #server-side. Solo play remains fully supported and is never gated behind
     #having a companion. Every key is clamped in CoopDefaults.
     companion:
-        enabled: false                    #Master switch. Must be turned on explicitly for playtests.
+        #Enabled for the local 0.1b gameplay test. Set back to false to return
+        #to pure solo play; nothing in the game depends on this feature.
+        enabled: true
         max_active_per_owner: 1           #One companion per owner in the MVP.
         max_active_per_account: 1         #One companion per account in the MVP.
-        allowed_map_ids: []               #Empty = no map eligible. Add explicit grind map ids to enable spawning.
+        #Level 1-30 Henesys progression chain (verified map names from
+        #wz/String.wz/Map.img.xml). An empty list would mean "no map eligible".
+        allowed_map_ids:
+            - 100000001                   # Henesys Townstreet (lv 1-5)
+            - 100010000                   # The Hill East of Henesys (lv 5-10)
+            - 100000003                   # Pig Park (lv 8-12)
+            - 100000004                   # Pig Park II (lv 10-15)
+            - 100020000                   # The Rain-Forest East of Henesys (lv 15-20)
+            - 100030000                   # The Forest East of Henesys (lv 20-30)
         allowed_job_tier: 1               #Only first-job characters can be companions.
         tick_ms: 500                      #AI tick cadence. Raising this lowers server load.
 

@@ -52,10 +52,13 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
   hint_seen_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_character_hint_seen';")"
   hint_job_filter_col="$(db_query "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_milestone_hints' AND COLUMN_NAME = 'job_filter';")"
   storage_uq="$(db_query "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'storages' AND INDEX_NAME = 'uq_storages_account_world';")"
-  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033');")"
+  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033','coop-1100');")"
   wrong_stack_rows="$(db_query "SELECT COUNT(*) FROM coop_stack_overrides WHERE item_id IN (2100000,2100001,2100002,4001000,4001001,4001002,4001010,4001011,4001012);")"
+  coop_1100_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID = 'coop-1100';")"
+  companion_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_companion_bindings';")"
+  companion_uq="$(db_query "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_companion_bindings' AND INDEX_NAME = 'uq_coop_companion_companion';")"
 
-  expected_ids=11
+  expected_ids=12
   if [[ "$coop_changesets" -ge "$expected_ids" \
         && "$coop_ids_present" -eq "$expected_ids" \
         && "$charslot_default" == "15" \
@@ -66,8 +69,11 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
         && "$hint_seen_table" -eq 1 \
         && "$hint_job_filter_col" -eq 1 \
         && "$storage_dupes" -eq 0 \
-        && "$storage_uq" -ge 1 ]]; then
-    log "DB checks passed: ${coop_changesets} coop changesets (${coop_ids_present}/${expected_ids} expected), charslots=${charslot_default}, useslots=${useslots_default}, stack overrides=${stack_overrides}, hints=${hint_rows}, hint table+col=${hint_seen_table}/${hint_job_filter_col}, wrong-family rows=${wrong_stack_rows}, storage dupes=${storage_dupes}, uq=${storage_uq}."
+        && "$storage_uq" -ge 1 \
+        && "$coop_1100_present" -eq 1 \
+        && "$companion_table" -eq 1 \
+        && "$companion_uq" -ge 1 ]]; then
+    log "DB checks passed: ${coop_changesets} coop changesets (${coop_ids_present}/${expected_ids} expected), charslots=${charslot_default}, useslots=${useslots_default}, stack overrides=${stack_overrides}, hints=${hint_rows}, hint table+col=${hint_seen_table}/${hint_job_filter_col}, wrong-family rows=${wrong_stack_rows}, storage dupes=${storage_dupes}, uq=${storage_uq}, companion table=${companion_table} uq=${companion_uq}."
     db_ok=1
   else
     warn "DB checks failed:"
@@ -81,6 +87,9 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
     warn "  hint job_filter col exists: ${hint_job_filter_col:-<error>} (expected 1)"
     warn "  storage duplicate rows: ${storage_dupes:-<error>} (expected 0)"
     warn "  storage uq index: ${storage_uq:-<error>} (expected >= 1)"
+    warn "  coop-1100 applied: ${coop_1100_present:-<error>} (expected 1)"
+    warn "  companion bindings table: ${companion_table:-<error>} (expected 1)"
+    warn "  companion unique index: ${companion_uq:-<error>} (expected >= 1)"
   fi
 fi
 

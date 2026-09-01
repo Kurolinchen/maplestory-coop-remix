@@ -85,3 +85,53 @@ Decision (owner-approved): set `USE_ENABLE_SOLO_EXPEDITIONS: true`; expedition m
 become configurable per type via `coop.expedition_min_size`. Party cap stays 6 (client UI).
 Consequences: Any boss expedition is solo-enterable; prequest gating is off; PQ script
 `minPlayers` relaxation is a documented per-script follow-up (see 0.1 feature spec).
+
+## D9 — Companion Bots are real characters with opt-in everything (2026-09-01, accepted)
+
+Context: Milestone 0.1b wants optional Companion Bots for the first gameplay
+test. The owner's rules were: companions optional, solo always viable, no
+fork merge, no external bulk copy, and no advanced autonomy (ownerless
+population, economy automation, RTS control).
+
+Decision (owner-approved):
+- A companion is a NORMAL alternate character, loaded/saved through the existing
+  Character paths and hosted by a headless `Client` subclass whose `sendPacket`
+  is a no-op. It is NOT registered in `Channel`/`World` `PlayerStorage`.
+- No code was ported from `nutnnut/Cosmic` (pinned `b684bf7858d5`) or
+  `NDBellisario/cosmic` (pinned `b01cf27833f5`). Inspecting
+  `nutnnut/Cosmic:src/main/java/server/bots` showed a full artificial-population
+  system (`BotGenerator`, `BotGachaponManager`, `BotFarmingCostModel`, ~50
+  classes) — exactly the autonomy we defer. The references are recorded for
+  provenance only; `P0nk/Cosmic` remains our upstream lineage.
+- Everything dangerous defaults to off: feature disabled, empty map allowlist
+  (meaning NO map is eligible), portal fallback disabled, looting opt-in,
+  death dismisses the companion.
+- Damage comes from the companion's real stats through the upstream
+  `calculateMaxBaseDamage`/`calculateMaxBaseMagicDamage` helpers and is clamped
+  by both a monster-HP fraction and an absolute ceiling.
+- All damage and pickup go through `MapleMap.damageMonster` and
+  `Character.pickupItem` so the existing EXP/loot/ownership pipelines stay
+  authoritative.
+
+Consequences: Solo play is unchanged when companions are disabled. A companion
+can never satisfy a party-size check, because instanced map ranges are
+hard-blocked. Cross-map travel is limited to following the owner through
+scriptless allowlisted portals; the catch-up fallback stays inert until its own
+audit signs off.
+
+## D10 — Companion state lives in one binding table, not a parallel character schema (2026-09-01, accepted)
+
+Context: A companion must remain a fully playable normal character, so any
+"bot schema" risks diverging from `characters` and creating duplicate sources of
+truth for level, inventory, equipment and EXP.
+
+Decision: The only new persisted state is `coop_companion_bindings`
+(owner PK, companion UNIQUE, both FK `ON DELETE CASCADE`). Level, EXP, HP/MP,
+inventory, equipment, mesos and map all stay in the existing character tables.
+Denormalised `account_id`/`world` on the binding are for audit speed only;
+runtime ownership always re-verifies against `characters`.
+
+Consequences: Logging into a companion manually is always possible and always
+sees the same state. Character deletion cleans up bindings automatically. The
+companion system can be removed later by dropping one table without leaving
+orphaned character state.

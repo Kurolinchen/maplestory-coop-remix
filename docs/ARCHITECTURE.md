@@ -243,6 +243,16 @@ Where our systems will hook in (planned; keep the footprint minimal):
   solo-expedition sizing in `coop/expedition/` (+`ExpeditionType.getMinSize`), skill reset in
   `coop/reset/` (+`gm2/ResetSkillCommand`), GM cmds `!charslots`/`!storageslots` (gm4).
   Full touchpoint list: `docs/features/0.1-coop-qol.md`.
+- **Companion Bot MVP (implemented 0.1b)**: new package `coop/companion/` with
+  `coop-1100-companion-bindings` migration. Integration footprint is three
+  touchpoints only: `CommandsExecutor` registers `@companion` (gm0);
+  `Client.disconnectInternal` dismisses companions owned by the departing
+  character before map/party teardown; `Server.shutdownInternal` calls
+  `CompanionController.shutdownAll()` before worlds dispose their maps.
+  Companions are real `Character` objects hosted by a headless `Client`
+  subclass and are deliberately NOT in `PlayerStorage`. Damage/pickup reuse
+  `MapleMap.damageMonster` / `Character.pickupItem`.
+  Full contract: `docs/features/companion-party-bot-mvp.md`.
 
 ## Upstream quirks (do not "fix" silently)
 
