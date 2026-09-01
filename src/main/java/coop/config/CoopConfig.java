@@ -29,6 +29,29 @@ public class CoopConfig {
     // Companion Bot (Slice B). Nested config object, all accessors go through CoopDefaults.
     public CompanionConfig companion = new CompanionConfig();
 
+    // Early Game Remix (levels 1-30). All accessors go through CoopDefaults.
+    public EarlyGameConfig early_game = new EarlyGameConfig();
+
+    public static class EarlyGameConfig {
+        /** Extra SP granted to beginner jobs at creation so Three Snails /
+            Recovery / Nimble Feet are usable during levels 1-10. */
+        public int beginner_sp_bonus = 3;
+        /** Grant the data-driven first-job kit on first job advancement. */
+        public boolean first_job_kits_enabled = true;
+        /** Enable the @training guide (player command). */
+        public boolean training_guide_enabled = true;
+        /** How far above/below the player level a recommended spot may be. */
+        public int training_level_delta = 10;
+        /** Maximum number of recommended spots listed by @training. */
+        public int training_max_results = 5;
+        /** Early-game EXP telemetry is opt-in (dev/balance use). */
+        public boolean telemetry_enabled = false;
+        public int telemetry_flush_interval_seconds = 60;
+        public int telemetry_queue_capacity = 100_000;
+        public int telemetry_batch_size = 1_000;
+        public int telemetry_shutdown_timeout_seconds = 5;
+    }
+
     public static class CompanionConfig {
         // Master switch. Disabled by default; ops opt in via config.yaml.
         public boolean enabled = false;
@@ -82,4 +105,3 @@ public class CoopConfig {
         public int death_delay_ms = 3000;
     }
 }
-

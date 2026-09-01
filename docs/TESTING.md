@@ -107,6 +107,16 @@ The helper always sets GM level 4, verifies the Compose project/service/volume a
 prints database credentials. Log in again after it succeeds. Then follow the full checklist
 in `docs/features/0.1-coop-qol.md`.
 
+For a fresh non-GM playtest while retaining tester accounts and slot capacity:
+
+```bash
+ops/backup-dev-db.sh
+ops/wipe-characters.sh --i-understand
+```
+
+The wipe is destructive and confirms interactively. It preserves accounts,
+character-slot capacity, Liquibase state, storage and account-owned inventory.
+
 ## Regression triage
 
 When something breaks, classify before fixing (required in reports):

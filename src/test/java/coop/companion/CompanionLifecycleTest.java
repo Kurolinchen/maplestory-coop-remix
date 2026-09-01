@@ -5,12 +5,15 @@
 */
 package coop.companion;
 
+import client.Character;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 
 /**
  * Slice B contract tests for the lifecycle result type and the job-tier policy.
@@ -113,5 +116,16 @@ class CompanionLifecycleTest {
         assertEquals(2, s.consecutiveFailures());
         s.markTickCompleted();
         assertEquals(0, s.consecutiveFailures(), "a successful tick resets the counter");
+    }
+
+    @Test
+    void partyHpSynchronizationReceivesBeforePublishingOwnHp() {
+        Character bot = mock(Character.class);
+
+        CompanionLifecycleService.synchronizePartyHp(bot);
+
+        org.mockito.InOrder order = inOrder(bot);
+        order.verify(bot).receivePartyMemberHP();
+        order.verify(bot).updatePartyMemberHP();
     }
 }

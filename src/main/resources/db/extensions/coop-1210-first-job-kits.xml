@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Early Game Remix, DECISIONS.md D11):
+        Data-driven first-job starter kits.
+
+        Upstream grants a single weapon per class inside five NPC scripts
+        (scripts/npc/1022000.js, 1032001.js, 1012100.js, 1052001.js,
+        1090000.js). Editing those scripts would scatter balance data across
+        JavaScript and duplicate it for the Cygnus quest path
+        (scripts/quest/2010*.js). Instead we add one table and one hook in
+        Character.changeJob, which is the single code path every advancement
+        (NPC, quest and GM command) flows through.
+
+        jobid = 0 is the "all classes" bucket and is always granted in
+        addition to the class-specific rows. Balance therefore stays a pure
+        data change (AGENTS.md rule 5).
+    -->
+    <changeSet id="coop-1210" author="coop">
+        <comment>Co-op Remix 0.1b: data-driven first-job starter kits.</comment>
+
+        <createTable tableName="coop_first_job_kits">
+            <!-- MySQL requires an AUTO_INCREMENT column to be a key, so the
+                 primary key is declared inline instead of via addPrimaryKey. -->
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true"
+                             primaryKeyName="pk_coop_first_job_kits"/>
+            </column>
+            <column name="jobid" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="itemid" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="note" type="VARCHAR(120)"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="coop_first_job_kits"
+                             columnNames="jobid, itemid"
+                             constraintName="uq_coop_first_job_kits_job_item"/>
+    </changeSet>
+</databaseChangeLog>

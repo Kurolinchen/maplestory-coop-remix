@@ -188,7 +188,9 @@ public final class CompanionController {
 
         CompanionLifecycleService.Result result = lifecycle.spawn(owner, session);
         if (!result.success()) {
-            manager.release(session);
+            if (session.state() != CompanionSession.State.SAVE_FAILED) {
+                manager.release(session);
+            }
             return Outcome.fail("Spawn failed: " + result.reason());
         }
         // Slice C: start the shared follow/navigation tick loop (idempotent).
@@ -445,6 +447,10 @@ public final class CompanionController {
      * without saving.
      */
     private Character findCompanionCharacter(CompanionSession session) {
+        Character attached = session.companion();
+        if (attached != null) {
+            return attached;
+        }
         Character owner = findOnlineOwner(session);
         if (owner != null && owner.getMap() != null) {
             Character onOwnerMap = owner.getMap().getCharacterById(session.companionCharacterId());

@@ -300,6 +300,78 @@ public final class CoopDefaults {
         return clamp(companion().death_delay_ms, 0, 600_000);
     }
 
+    // ---- Early Game Remix (levels 1-30) ----------------------------------
+
+    public static CoopConfig.EarlyGameConfig earlyGame() {
+        CoopConfig cfg = cfg();
+        return cfg.early_game == null ? new CoopConfig.EarlyGameConfig() : cfg.early_game;
+    }
+
+    public static int beginnerSpBonus(CoopConfig cfg) {
+        CoopConfig.EarlyGameConfig eg = cfg.early_game == null
+                ? new CoopConfig.EarlyGameConfig() : cfg.early_game;
+        return clamp(eg.beginner_sp_bonus, 0, 30);
+    }
+
+    public static int beginnerSpBonus() {
+        return beginnerSpBonus(cfg());
+    }
+
+    public static boolean firstJobKitsEnabled() {
+        return earlyGame().first_job_kits_enabled;
+    }
+
+    public static boolean trainingGuideEnabled() {
+        return earlyGame().training_guide_enabled;
+    }
+
+    public static int trainingLevelDelta() {
+        return clamp(earlyGame().training_level_delta, 0, 200);
+    }
+
+    public static int trainingMaxResults() {
+        return clamp(earlyGame().training_max_results, 1, 25);
+    }
+
+    public static boolean earlyGameTelemetryEnabled() {
+        return earlyGame().telemetry_enabled;
+    }
+
+    public static int earlyGameTelemetryFlushSeconds() {
+        return clamp(earlyGame().telemetry_flush_interval_seconds, 5, 3600);
+    }
+
+    public static int earlyGameTelemetryQueueCapacity(CoopConfig cfg) {
+        CoopConfig.EarlyGameConfig eg = cfg.early_game == null
+                ? new CoopConfig.EarlyGameConfig() : cfg.early_game;
+        return clamp(eg.telemetry_queue_capacity, 100, 100_000);
+    }
+
+    public static int earlyGameTelemetryQueueCapacity() {
+        return earlyGameTelemetryQueueCapacity(cfg());
+    }
+
+    public static int earlyGameTelemetryBatchSize(CoopConfig cfg) {
+        CoopConfig.EarlyGameConfig eg = cfg.early_game == null
+                ? new CoopConfig.EarlyGameConfig() : cfg.early_game;
+        return Math.min(earlyGameTelemetryQueueCapacity(cfg),
+                clamp(eg.telemetry_batch_size, 1, 5_000));
+    }
+
+    public static int earlyGameTelemetryBatchSize() {
+        return earlyGameTelemetryBatchSize(cfg());
+    }
+
+    public static int earlyGameTelemetryShutdownSeconds(CoopConfig cfg) {
+        CoopConfig.EarlyGameConfig eg = cfg.early_game == null
+                ? new CoopConfig.EarlyGameConfig() : cfg.early_game;
+        return clamp(eg.telemetry_shutdown_timeout_seconds, 1, 30);
+    }
+
+    public static int earlyGameTelemetryShutdownSeconds() {
+        return earlyGameTelemetryShutdownSeconds(cfg());
+    }
+
     private static double clampRatio(double value) {
         if (Double.isNaN(value)) {
             return 0.0;

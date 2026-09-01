@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Early Game Remix, DECISIONS.md D11):
+        Early-game progression telemetry.
+
+        Cosmic already has server/ExpLogger writing to characterexplogs, but
+        that table records no level, map, mob or job, so it cannot answer
+        "how long do levels 1-30 actually take?". Widening the upstream schema
+        would be a core change; we add an adjacent coop table instead and fill
+        it from one guarded coop call site in Character.gainExpInternal.
+
+        Opt-in (coop.early_game.telemetry_enabled, default false) and batched
+        asynchronously, so it costs nothing when disabled.
+    -->
+    <changeSet id="coop-1220" author="coop">
+        <comment>Co-op Remix 0.1b: early-game EXP telemetry table.</comment>
+
+        <createTable tableName="coop_early_game_exp_log">
+            <!-- MySQL requires an AUTO_INCREMENT column to be a key, so the
+                 primary key is declared inline instead of via addPrimaryKey. -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true"
+                             primaryKeyName="pk_coop_early_game_exp_log"/>
+            </column>
+            <column name="characterid" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="level" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="jobid" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mapid" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gained_exp" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="VARCHAR(16)" defaultValue="'MOB'">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logged_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="coop_early_game_exp_log"
+                                 baseColumnNames="characterid"
+                                 referencedTableName="characters"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_coop_early_game_exp_log_character"
+                                 onDelete="CASCADE"/>
+
+        <sql>CREATE INDEX ix_coop_early_game_exp_level ON coop_early_game_exp_log (level, logged_at);</sql>
+    </changeSet>
+</databaseChangeLog>

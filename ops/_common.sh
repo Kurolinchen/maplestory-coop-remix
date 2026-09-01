@@ -13,6 +13,16 @@ COMPOSE_PROJECT="maple-coop-dev"
 DB_SERVICE="db"
 SERVER_SERVICE="maplestory"
 ONLINE_MARKER="Cosmic is now online"
+VPS_ENV_FILE="$OPS_DIR/vps.env"
+
+# Optional VPS endpoint (gitignored). Sourced here so every remote script sees
+# VPS_HOST without each caller passing it. Contains host/alias only, no secrets.
+if [[ -f "$VPS_ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$VPS_ENV_FILE"
+  set +a
+fi
 
 log()  { printf '\033[1;34m[ops]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[ops][warn]\033[0m %s\n' "$*" >&2; }

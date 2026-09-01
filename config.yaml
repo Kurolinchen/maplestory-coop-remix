@@ -343,9 +343,17 @@ server:
     CHSCROLL_STAT_RANGE: 5              #Stat upgrade range (-N, N) on chaos scrolls.
 
     #Beginner Skills Configuration
-    USE_ULTRA_NIMBLE_FEET: false     #Massive speed & jump upgrade.
-    USE_ULTRA_RECOVERY: false        #Massive recovery amounts overtime.
-    USE_ULTRA_THREE_SNAILS: false    #Massive damage on shell toss.
+    #coop 0.1b (Early Game Remix, DECISIONS.md D11): all three are ON so levels
+    #1-10 are not a slog. They are intentionally strong; every effect is a
+    #server-side config flag, so this is a pure data decision and can be
+    #reverted without touching code.
+    #  - Three Snails: damage is multiplied by player level and consumes one
+    #    shell per toss (AbstractDealDamageHandler).
+    #  - Recovery: heal interval 5000ms -> 2000ms (Character).
+    #  - Nimble Feet: massive speed/jump (StatEffect).
+    USE_ULTRA_NIMBLE_FEET: true      #Massive speed & jump upgrade.
+    USE_ULTRA_RECOVERY: true         #Massive recovery amounts overtime.
+    USE_ULTRA_THREE_SNAILS: true     #Massive damage on shell toss.
 
     #Other Skills Configuration
     USE_FULL_ARAN_SKILLSET: false   #Enables starter availability to all Aran job skills. Suggestion thanks to Masterrulax.
@@ -533,3 +541,19 @@ coop:
 
         death_dismiss: true               #A dead companion is dismissed instead of auto-respawning.
         death_delay_ms: 3000
+
+    #Early Game Remix (levels 1-30, DECISIONS.md D11).
+    #Goal: the first 30 levels must teach the class and stay fun, not be a slog.
+    #Every number here is data; nothing about this feature is hardcoded.
+    early_game:
+        beginner_sp_bonus: 3              #Extra SP for beginner jobs at creation, so the
+                                          #three beginner skills are usable in levels 1-10.
+        first_job_kits_enabled: true      #Grant the data-driven first-job kit (coop_first_job_kits).
+        training_guide_enabled: true      #Enable the @training player command.
+        training_level_delta: 10          #Recommended spots may be +/- this many levels.
+        training_max_results: 5           #How many spots @training lists.
+        telemetry_enabled: true           #Early-game EXP telemetry: ON for the online level-1-30 playtest.
+        telemetry_flush_interval_seconds: 60
+        telemetry_queue_capacity: 100000  #Drops new samples rather than growing heap during a DB outage.
+        telemetry_batch_size: 1000        #Maximum rows in one telemetry transaction.
+        telemetry_shutdown_timeout_seconds: 5

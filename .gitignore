@@ -30,6 +30,7 @@ database/docker-pg-db-data
 # Co-op Remix dev environment
 .env
 ops/.env
+ops/vps.env
 ops/config/
 ops/backups/
 

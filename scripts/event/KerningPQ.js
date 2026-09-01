@@ -24,7 +24,19 @@
  */
 
 var isPq = true;
-var minPlayers = 3, maxPlayers = 4;
+// coop 0.1b (Early Game Remix, DECISIONS.md D8/D11): Kerning PQ is the main
+// level 21-30 activity and must be enterable solo. GAME_DESIGN pillar 1 says
+// no content is gated behind "bring N players", and D8 already made expedition
+// minimums configurable for the same reason.
+//
+// IMPORTANT: lowering minPlayers alone is NOT enough. Stages 2-4 are
+// "stand on the right spots" puzzles whose hardcoded combinations require
+// exactly THREE occupied spots, so a solo runner would be permanently stuck at
+// stage 2, and stage 1 would become free because numpasses would be 0 and
+// hasItem(id, 0) is always true. The stage logic requires one spot per
+// non-leader member (zero solo) in scripts/npc/9020001.js.
+// Keep both files in sync.
+var minPlayers = 1, maxPlayers = 4;
 var minLevel = 21, maxLevel = 30;
 var entryMap = 103000800;
 var exitMap = 103000890;

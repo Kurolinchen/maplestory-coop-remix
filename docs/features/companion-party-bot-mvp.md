@@ -64,8 +64,9 @@ architecture, using only the existing public APIs documented below.
 | `coop.companion.CompanionBindingRepository` | `coop_companion_bindings` persistence and authoritative ownership verification (fresh DB read against `characters`, never trusting a cached row). |
 | `coop.companion.CompanionClient` | Headless `Client` subclass; `sendPacket` is a no-op; `detach()` releases the character (never calls the final `Client.disconnect`). |
 | `coop.companion.CompanionLifecycleService` | spawn / dismiss / `transferToMap`; rollback of partial attach operations. |
-| `coop.companion.CompanionMapPolicy` | Pure map/portal eligibility rules. |
+| `coop.companion.CompanionMapPolicy` | Map/portal eligibility rules, including runtime entry-script availability. |
 | `coop.companion.CompanionFollowController` | Same-map follow + bounded static-portal following. |
+| `coop.companion.CompanionMovementService` | Safe foothold resolution and complete server-authored movement packets. |
 | `coop.companion.CompanionTickScheduler` | One tick per active session at `coop.companion.tick_ms`. |
 | `coop.companion.CompanionCombatProfile` | Job-family classification (audited from OUR `client/Job.java`). |
 | `coop.companion.CompanionCombatController` | Target selection, bounded damage, incoming contact damage, ammunition/MP consumption. |
@@ -79,7 +80,9 @@ architecture, using only the existing public APIs documented below.
 |---|---|
 | `client/command/CommandsExecutor.java` | registers `@companion` (gm0) |
 | `client/Client.java` | owner-disconnect hook at the top of `disconnectInternal` |
+| `client/Character.java` | checked synchronous save result for lifecycle-safe dismissal |
 | `net/server/Server.java` | `shutdownAll()` at the top of `shutdownInternal`, before worlds dispose their maps |
+| `scripting/map/MapScriptManager.java` | cache-aware entry-script availability query |
 | `config/YamlConfig.java` | unchanged; the `coop.companion` block rides on the existing `CoopConfig` field |
 | `coop/config/CoopConfig.java` | nested `CompanionConfig` block |
 | `coop/config/CoopDefaults.java` | null-safe, clamped accessors |
@@ -203,7 +206,8 @@ A companion is loaded **outside** `PlayerStorage`, which means:
 ## Manual gameplay-test checklist
 
 Prerequisites: set `coop.companion.enabled: true` and add your training map ids
-to `coop.companion.allowed_map_ids`, then `ops/build.sh` and `ops/start.sh`.
+to `coop.companion.allowed_map_ids`, then `ops/build.sh` and
+`ops/start.sh --build`.
 
 ### Phase A — binding and spawning
 
@@ -212,56 +216,58 @@ to `coop.companion.allowed_map_ids`, then `ops/build.sh` and `ops/start.sh`.
 3. `@companion bind <second-character-name>` → expect success.
 4. `@companion status` → binding shown, inactive.
 5. Walk onto an allowlisted map, `@companion spawn` → companion appears beside
-   you and joins the party UI.
+   you, immediately settles onto the same foothold and joins the party UI.
 6. `@companion status` → live session, mode, state, map.
-7. Try binding a character from another account (or an online character) → both
+7. Before either character moves or takes damage, verify that the companion's
+   party HP bar is populated rather than empty.
+8. Try binding a character from another account (or an online character) → both
    must fail with a clear reason.
 
 ### Phase B — following
 
-8. Walk across the map; the companion should stay within follow distance.
-9. Walk through a normal static portal into another allowlisted map → the
+9. Walk across the map; the companion should stay within follow distance.
+10. Walk through a normal static portal into another allowlisted map → the
    companion should follow.
-10. Walk into a town or an unallowlisted map → the companion must dismiss and
+11. Walk into a town or an unallowlisted map → the companion must dismiss and
     save (check the log line, not just the UI).
-11. `@companion status` after dismissal → inactive.
+12. `@companion status` after dismissal → inactive.
 
 ### Phase C — combat
 
-12. `@companion mode grind`, dismiss, spawn again.
-13. Enter a training map with level-appropriate monsters; the companion should
+13. `@companion mode grind`, dismiss, spawn again.
+14. Enter a training map with level-appropriate monsters; the companion should
     target the nearest one and attack.
-14. Watch the companion's HP; it should drink from its own inventory when it
+15. Watch the companion's HP; it should drink from its own inventory when it
     drops below the configured ratio.
-15. Empty the companion's ammunition (for Bowman/Thief/Gunslinger) or MP (for
+16. Empty the companion's ammunition (for Bowman/Thief/Gunslinger) or MP (for
     Magician) → it must stop attacking rather than attack for free.
-16. Compare the damage the companion deals against the same monster played
+17. Compare the damage the companion deals against the same monster played
     manually — it must be in the same ballpark, never higher.
 
 ### Phase D — loot and equipment
 
-17. `@companion loot on` (requires dismissal first), spawn, kill monsters → the
+18. `@companion loot on` (requires dismissal first), spawn, kill monsters → the
     companion picks up nearby legal loot into ITS OWN inventory.
-18. Verify the owner's inventory does NOT receive the companion's loot.
-19. `@companion equip <slot> <target>` → the item is equipped through normal
+19. Verify the owner's inventory does NOT receive the companion's loot.
+20. `@companion equip <slot> <target>` → the item is equipped through normal
     validation; an invalid target must be rejected.
 
 ### Phase E — death and persistence
 
-20. Let the companion die (or force it) → it must be dismissed rather than
+21. Let the companion die (or force it) → it must be dismissed rather than
     loop-respawning.
-21. `@companion dismiss`, then check the companion's character row: HP/MP, map,
+22. `@companion dismiss`, then check the companion's character row: HP/MP, map,
     inventory and equipment must reflect the session.
-22. Log in as the companion character manually → everything must be intact and
+23. Log in as the companion character manually → everything must be intact and
     the character must be playable.
-23. Restart the server with a companion active → the shutdown hook must save it;
+24. Restart the server with a companion active → the shutdown hook must save it;
     check the log for "Companion shutdown save FAILED" (there must be none).
 
 ### Phase F — integrity spot checks
 
-24. Watch for any duplicate item, meso or EXP during the session.
-25. Confirm the companion never appears in channel player counts or `@online`.
-26. Confirm the companion never enters a PQ lobby or boss map.
+25. Watch for any duplicate item, meso or EXP during the session.
+26. Confirm the companion never appears in channel player counts or `@online`.
+27. Confirm the companion never enters a PQ lobby or boss map.
 
 ## Deferred (explicitly out of scope for this milestone)
 

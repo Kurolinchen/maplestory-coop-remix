@@ -243,12 +243,26 @@ Where our systems will hook in (planned; keep the footprint minimal):
   solo-expedition sizing in `coop/expedition/` (+`ExpeditionType.getMinSize`), skill reset in
   `coop/reset/` (+`gm2/ResetSkillCommand`), GM cmds `!charslots`/`!storageslots` (gm4).
   Full touchpoint list: `docs/features/0.1-coop-qol.md`.
+- **Early Game Remix (implemented 0.1b)**: new package `coop/earlygame/` with
+  migrations `coop-1210` (first-job kits), `coop-1211`/`coop-1212` (kit seeds) and
+  `coop-1220`/`coop-1221` (EXP telemetry). Integration touchpoints: `Character.changeJob`
+  grants the data-driven first-job kit; `Character.gainExpInternal` has one
+  opt-in telemetry call; `Server.shutdownInternal` performs its bounded final
+  flush while the DB is available; `CharacterFactory.createNewCharacter` applies the
+  beginner SP bonus to the creation recipe; `CommandsExecutor` registers
+  `@training` (gm0); `constants/skills/Beginner` had a wrong `THREE_SNAILS` id.
+  `scripts/event/KerningPQ.js` (`minPlayers` 3 → 1) and
+  `scripts/npc/9020001.js` (stage combination count follows team size) must be
+  kept in sync. Full contract: `docs/features/0.1b-early-game-remix.md`.
 - **Companion Bot MVP (implemented 0.1b)**: new package `coop/companion/` with
-  `coop-1100-companion-bindings` migration. Integration footprint is three
-  touchpoints only: `CommandsExecutor` registers `@companion` (gm0);
+  `coop-1100-companion-bindings` migration. Integration footprint is kept to
+  narrow touchpoints: `CommandsExecutor` registers `@companion` (gm0);
   `Client.disconnectInternal` dismisses companions owned by the departing
   character before map/party teardown; `Server.shutdownInternal` calls
-  `CompanionController.shutdownAll()` before worlds dispose their maps.
+  `CompanionController.shutdownAll()` before worlds dispose their maps;
+  `Character.saveCharToDBChecked` exposes commit success to the synchronous
+  companion-dismiss path; `MapScriptManager.hasMapScript` lets companion map
+  policy account for both loaded scripts and files.
   Companions are real `Character` objects hosted by a headless `Client`
   subclass and are deliberately NOT in `PlayerStorage`. Damage/pickup reuse
   `MapleMap.damageMonster` / `Character.pickupItem`.

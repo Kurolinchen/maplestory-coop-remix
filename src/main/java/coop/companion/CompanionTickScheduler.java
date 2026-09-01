@@ -114,10 +114,9 @@ public final class CompanionTickScheduler {
             session.recordTickFailure("owner not resolvable");
             return;
         }
-        Character bot = owner.getMap() != null
-                ? owner.getMap().getCharacterById(session.companionCharacterId()) : null;
+        Character bot = session.companion();
         if (bot == null) {
-            session.recordTickFailure("companion not on owner's map");
+            session.recordTickFailure("companion object is unavailable");
             return;
         }
         CompanionFollowController.OwnerTracker tracker = trackers

@@ -29,14 +29,16 @@ import scripting.AbstractScriptManager;
 
 import javax.script.Invocable;
 import javax.script.ScriptException;
-import java.util.HashMap;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MapScriptManager extends AbstractScriptManager {
     private static final Logger log = LoggerFactory.getLogger(MapScriptManager.class);
     private static final MapScriptManager instance = new MapScriptManager();
 
-    private final Map<String, Invocable> scripts = new HashMap<>();
+    private final Map<String, Invocable> scripts = new ConcurrentHashMap<>();
 
     public static MapScriptManager getInstance() {
         return instance;
@@ -44,6 +46,24 @@ public class MapScriptManager extends AbstractScriptManager {
 
     public void reloadScripts() {
         scripts.clear();
+    }
+
+    public boolean hasMapScript(String mapScriptPath) {
+        return scripts.containsKey(mapScriptPath)
+                || Files.isRegularFile(Path.of("scripts", "map", mapScriptPath + ".js"));
+    }
+
+    public boolean hasEntryScript(int mapId, String onUserEnter, String onFirstUserEnter) {
+        return isEntryScript(mapId, onUserEnter, "onUserEnter")
+                || isEntryScript(mapId, onFirstUserEnter, "onFirstUserEnter");
+    }
+
+    private boolean isEntryScript(int mapId, String scriptName, String scriptDirectory) {
+        if (scriptName == null || scriptName.isEmpty()) {
+            return false;
+        }
+        return !scriptName.equals(Integer.toString(mapId))
+                || hasMapScript(scriptDirectory + "/" + scriptName);
     }
 
     public boolean runMapScript(Client c, String mapScriptPath, boolean firstUser) {

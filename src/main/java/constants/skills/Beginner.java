@@ -28,7 +28,11 @@ public class Beginner {
     public static final int BLESSING_OF_THE_FAIRY = 12;
     public static final int FOLLOW_THE_LEADER = 8;
     public static final int MAP_CHAIR = 100;
-    public static final int THREE_SNAILS = 1001;
+    // coop 0.1b: THREE_SNAILS was 1001, identical to RECOVERY. The runtime
+    // Ultra-Three-Snails path computes the id dynamically
+    // (jobType * 10000000 + 1000), so this was a consistency defect, not a
+    // behavioural one. Correct v83 id for Three Snails is 1000.
+    public static final int THREE_SNAILS = 1000;
     public static final int RECOVERY = 1001;
     public static final int NIMBLE_FEET = 1002;
     public static final int MONSTER_RIDER = 1004;

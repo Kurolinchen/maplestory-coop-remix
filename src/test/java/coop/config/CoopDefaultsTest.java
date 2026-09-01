@@ -106,4 +106,23 @@ class CoopDefaultsTest {
         assertEquals(96, cfg.storage_slot_cap);
         assertEquals(Map.of(), cfg.expedition_min_size);
     }
+
+    @Test
+    void telemetryResourceLimitsAreClampedAndBatchFitsQueue() {
+        CoopConfig cfg = new CoopConfig();
+        cfg.early_game.telemetry_queue_capacity = 10;
+        cfg.early_game.telemetry_batch_size = 9_000;
+        cfg.early_game.telemetry_shutdown_timeout_seconds = 0;
+
+        assertEquals(100, CoopDefaults.earlyGameTelemetryQueueCapacity(cfg));
+        assertEquals(100, CoopDefaults.earlyGameTelemetryBatchSize(cfg));
+        assertEquals(1, CoopDefaults.earlyGameTelemetryShutdownSeconds(cfg));
+
+        cfg.early_game.telemetry_queue_capacity = 999_999;
+        cfg.early_game.telemetry_batch_size = 0;
+        cfg.early_game.telemetry_shutdown_timeout_seconds = 999;
+        assertEquals(100_000, CoopDefaults.earlyGameTelemetryQueueCapacity(cfg));
+        assertEquals(1, CoopDefaults.earlyGameTelemetryBatchSize(cfg));
+        assertEquals(30, CoopDefaults.earlyGameTelemetryShutdownSeconds(cfg));
+    }
 }

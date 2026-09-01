@@ -1,5 +1,6 @@
 package server.life;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,6 +26,19 @@ class MobSkillFactoryTest {
         MockitoAnnotations.openMocks(this);
         writeTestFileToTempDir();
         System.setProperty("wz-path", "%s/wz".formatted(wzPath.toString()));
+    }
+
+    /**
+     * Clears the global property again.
+     *
+     * <p>{@code WZFiles.DIRECTORY} is a static field initialised from this
+     * property the first time the enum is loaded, so leaving it set makes every
+     * later test class in the same JVM resolve WZ files inside this temporary
+     * directory. That silently broke tests which read real game data.
+     */
+    @AfterEach
+    void clearWzPath() {
+        System.clearProperty("wz-path");
     }
 
     private void writeTestFileToTempDir() {

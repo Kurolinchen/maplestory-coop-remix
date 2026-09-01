@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import server.maps.MapleMap;
 import server.maps.Portal;
-import tools.PacketCreator;
 
 import java.awt.Point;
 import java.util.List;
@@ -39,6 +38,7 @@ public final class CompanionFollowController {
     private static final Logger log = LoggerFactory.getLogger(CompanionFollowController.class);
 
     private final CompanionLifecycleService lifecycle = CompanionLifecycleService.getInstance();
+    private final CompanionMovementService movement = new CompanionMovementService();
 
     /** Outcome of a follow tick; carries the decision for diagnostics. */
     public record TickResult(boolean ownerStillValid, boolean moved, boolean transitioned,
@@ -61,10 +61,12 @@ public final class CompanionFollowController {
     public static final class OwnerTracker {
         private int lastMapId = -1;
         private Point lastPosition;
+        private Point previousMapPosition;
         private long lastMapChangeAt;
 
         public int lastMapId() { return lastMapId; }
         public Point lastPosition() { return lastPosition; }
+        public Point previousMapPosition() { return previousMapPosition; }
         public long lastMapChangeAt() { return lastMapChangeAt; }
 
         void observe(Character owner) {
@@ -75,10 +77,11 @@ public final class CompanionFollowController {
             Point pos = owner.getPosition();
             long now = System.currentTimeMillis();
             if (mapId != lastMapId) {
+                previousMapPosition = lastPosition;
                 lastMapId = mapId;
                 lastMapChangeAt = now;
             }
-            lastPosition = pos;
+            lastPosition = pos == null ? null : new Point(pos);
         }
     }
 
@@ -140,10 +143,10 @@ public final class CompanionFollowController {
         // Find a static, scriptless portal in the map we just left whose target
         // is the owner's new map.
         MapleMap source = bot.getMap();
-        Portal chosen = findFollowPortal(source, toMapId, tracker.lastPosition());
+        Portal chosen = findFollowPortal(source, toMapId, tracker.previousMapPosition());
         if (chosen != null) {
             CompanionLifecycleService.Result result =
-                    lifecycle.transferToMap(bot, source, destination);
+                    lifecycle.transferToMap(session, bot, source, destination, owner.getPosition());
             if (result.success()) {
                 log.info("Companion followed owner through portal: owner={} companion={} {}->{}",
                         session.ownerCharacterId(), session.companionCharacterId(),
@@ -159,7 +162,7 @@ public final class CompanionFollowController {
             return TickResult.dismiss("no safe portal to owner's map and fallback is disabled");
         }
         CompanionLifecycleService.Result result =
-                lifecycle.transferToMap(bot, source, destination);
+                lifecycle.transferToMap(session, bot, source, destination, owner.getPosition());
         if (result.success()) {
             log.warn("Companion used fallback catch-up: owner={} companion={} {}->{}",
                     session.ownerCharacterId(), session.companionCharacterId(),
@@ -199,33 +202,14 @@ public final class CompanionFollowController {
         int deltaY = clampStep(targetY - botPos.y, maxStep);
         Point candidate = new Point(botPos.x + deltaX, botPos.y + deltaY);
 
-        Point ground = map.getGroundBelow(candidate);
-        if (ground == null) {
+        java.util.Optional<CompanionMovementService.GroundedPosition> ground =
+                movement.resolveGround(map, candidate);
+        if (ground.isEmpty()) {
             return TickResult.idle("no valid foothold at the follow target");
         }
 
-        map.movePlayer(bot, ground);
-        map.broadcastMessage(bot, buildMovePacket(bot, ground), false);
+        movement.moveAndBroadcast(map, bot, ground.get());
         return TickResult.followed();
-    }
-
-    /**
-     * Builds a MOVE_PLAYER packet carrying a single absolute-movement fragment.
-     *
-     * <p>We serialise the fragment through the real {@link AbsoluteLifeMovement}
-     * rather than hand-writing bytes, so the wire format stays in one place. The
-     * companion has no client-side path, so a single absolute fragment is the
-     * honest representation of "the server moved this character here".
-     */
-    private net.packet.Packet buildMovePacket(Character bot, Point target) {
-        net.packet.OutPacket out = net.packet.OutPacket.create(net.opcodes.SendOpcode.MOVE_PLAYER);
-        out.writeInt(bot.getId());
-        out.writeInt(0);
-        server.movement.AbsoluteLifeMovement move =
-                new server.movement.AbsoluteLifeMovement(0, target, 0, bot.getStance());
-        out.writeByte(1);               // fragment count
-        move.serialize(out);
-        return out;
     }
 
     private static int clampStep(int delta, int maxStep) {

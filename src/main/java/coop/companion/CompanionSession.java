@@ -5,6 +5,8 @@
 */
 package coop.companion;
 
+import client.Character;
+
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -52,6 +54,8 @@ public final class CompanionSession {
     private volatile long lastSaveAt;
     private volatile int consecutiveFailures;
     private volatile String lastError;
+    private volatile Character companion;
+    private volatile boolean discardOnRecovery;
     private final java.util.concurrent.locks.Lock lock = new java.util.concurrent.locks.ReentrantLock(true);
 
     // Per-session action cooldowns. These MUST live here and not on the shared
@@ -88,6 +92,16 @@ public final class CompanionSession {
     public int consecutiveFailures() { return consecutiveFailures; }
     public String lastError() { return lastError; }
     public java.util.concurrent.locks.Lock lock() { return lock; }
+    public Character companion() { return companion; }
+    public boolean discardOnRecovery() { return discardOnRecovery; }
+
+    void setCompanion(Character companion) {
+        this.companion = companion;
+    }
+
+    void markFailedSpawnRecovery() {
+        discardOnRecovery = true;
+    }
 
     public boolean compareAndSetState(State expected, State next) {
         return state.compareAndSet(expected, next);

@@ -6,6 +6,7 @@
 package coop.companion;
 
 import coop.config.CoopDefaults;
+import scripting.map.MapScriptManager;
 import server.maps.Portal;
 
 import java.util.List;
@@ -23,7 +24,8 @@ import java.util.List;
  *       caller-side chain of checks (see {@link CompanionFollowController});</li>
  * </ul>
  *
- * <p>All methods are pure so they can be unit tested without a live world.
+ * <p>The policy is testable without a live world; entry-script checks also
+ * consult the runtime script cache and filesystem.
  */
 public final class CompanionMapPolicy {
     private CompanionMapPolicy() {
@@ -54,10 +56,8 @@ public final class CompanionMapPolicy {
         if (map == null) {
             return false;
         }
-        String onEnter = map.getOnUserEnter();
-        String onFirstEnter = map.getOnFirstUserEnter();
-        return (onEnter != null && !onEnter.isEmpty())
-                || (onFirstEnter != null && !onFirstEnter.isEmpty());
+        return MapScriptManager.getInstance().hasEntryScript(
+                map.getId(), map.getOnUserEnter(), map.getOnFirstUserEnter());
     }
 
     /**

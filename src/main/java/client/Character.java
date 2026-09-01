@@ -1146,6 +1146,10 @@ public class Character extends AbstractCharacterObject {
         if (newJob == null) {
             return;//the fuck you doing idiot!
         }
+        // coop 0.1b (Early Game Remix): remembered so the first-job kit is only
+        // granted on a genuine beginner -> first-job transition. Without this a
+        // repeated GM job command would hand out the kit again and again.
+        int previousJobId = this.job == null ? -1 : this.job.getId();
 
         if (canRecvPartySearchInvite && getParty() == null) {
             this.updatePartySearchAvailability(false);
@@ -1275,6 +1279,21 @@ public class Character extends AbstractCharacterObject {
         if (YamlConfig.config.server.USE_ANNOUNCE_CHANGEJOB) {
             if (!this.isGM()) {
                 broadcastAcquaintances(6, "[" + GameConstants.ordinal(GameConstants.getJobBranch(newJob)) + " Job] " + name + " has just become a " + GameConstants.getJobName(this.job.getId()) + ".");    // thanks Vcoc for noticing job name appearing in uppercase here
+            }
+        }
+
+        // coop 0.1b (Early Game Remix): data-driven first-job starter kit.
+        // changeJob is the single path every advancement uses (NPC scripts,
+        // Cygnus quests and the GM command), so one hook here avoids editing
+        // ten scripts. Only a genuine beginner -> first-job transition
+        // qualifies, which makes the grant idempotent against repeated GM job
+        // commands. The service is internally guarded and never throws.
+        if (coop.earlygame.BeginnerStart.isBeginnerJob(previousJobId)) {
+            try {
+                coop.earlygame.FirstJobKits.getInstance()
+                        .grantOnAdvancement(this, newJob.getId());
+            } catch (RuntimeException e) {
+                log.error("First-job kit hook failed character={}: {}", this.id, e.getMessage());
             }
         }
     }
@@ -3149,12 +3168,21 @@ public class Character extends AbstractCharacterObject {
         long total = Math.max(gain + equip + party, -exp.get());
 
         if (level < getMaxLevel() && (allowExpGain || this.getEventInstance() != null)) {
+            int preAwardLevel = level;
             long leftover = 0;
             long nextExp = exp.get() + total;
 
             if (nextExp > (long) Integer.MAX_VALUE) {
                 total = Integer.MAX_VALUE - exp.get();
                 leftover = nextExp - Integer.MAX_VALUE;
+            }
+            // coop 0.1b: record only EXP this call actually accepts, attributed
+            // to the level at which the award was received. The generic gainExp
+            // pipeline cannot truthfully infer whether it came from a mob,
+            // quest, script, item or another source.
+            if (coop.config.CoopDefaults.earlyGameTelemetryEnabled()) {
+                coop.earlygame.EarlyGameTelemetry.recordAcceptedGain(
+                        id, preAwardLevel, job.getId(), mapid, total);
             }
             updateSingleStat(Stat.EXP, exp.addAndGet((int) total));
             totalExpGained += total;
@@ -8267,8 +8295,13 @@ public class Character extends AbstractCharacterObject {
 
     //ItemFactory saveItems and monsterbook.saveCards are the most time consuming here.
     public synchronized void saveCharToDB(boolean notAutosave) {
+        saveCharToDBChecked(notAutosave);
+    }
+
+    /** Synchronous save variant for lifecycle code that must confirm the commit. */
+    public synchronized boolean saveCharToDBChecked(boolean notAutosave) {
         if (!loggedIn) {
-            return;
+            return false;
         }
 
         Calendar c = Calendar.getInstance();
@@ -8653,16 +8686,21 @@ public class Character extends AbstractCharacterObject {
 
                 // coop 0.1b (Slice A.1): persist milestone hint-seen markers; flush
                 // before storage so any failure rolls back the whole character save.
-                flushMilestoneHintSaves(con);
+                List<String> flushedMilestoneHints = flushMilestoneHintSaves(con);
 
+                boolean savedStorage = false;
                 if (storage != null && usedStorage) {
                     storage.saveToDB(con);
-                    // clear the dirty flag only after a successful save so a rolled-back
-                    // transaction does not silently leave storage unsaved.
-                    usedStorage = false;
+                    savedStorage = true;
                 }
 
                 con.commit();
+                // Dirty flags are cleared only after a confirmed commit, so a
+                // rolled-back transaction retries the same work next save.
+                markMilestoneHintSavesCommitted(flushedMilestoneHints);
+                if (savedStorage) {
+                    usedStorage = false;
+                }
             } catch (Exception e) {
                 con.rollback();
                 throw e;
@@ -8670,8 +8708,10 @@ public class Character extends AbstractCharacterObject {
                 con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
                 con.setAutoCommit(true);
             }
+            return true;
         } catch (Exception e) {
             log.error("Error saving chr {}, level: {}, job: {}", name, level, job.getId(), e);
+            return false;
         }
     }
 
@@ -10296,22 +10336,27 @@ public class Character extends AbstractCharacterObject {
      * inside an open JDBC transaction (saveCharToDB provides one). Failures bubble
      * up so the outer save rolls back, preserving the audit B1 guarantee.
      */
-    public void flushMilestoneHintSaves(java.sql.Connection con) throws java.sql.SQLException {
+    public List<String> flushMilestoneHintSaves(java.sql.Connection con) throws java.sql.SQLException {
         List<String> pending;
         synchronized (pendingMilestoneHintSaves) {
             if (pendingMilestoneHintSaves.isEmpty()) {
-                return;
+                return List.of();
             }
             pending = new ArrayList<>(pendingMilestoneHintSaves);
-            pendingMilestoneHintSaves.clear();
         }
         if (!coop.onboarding.CharacterHintState.persistSeen(con, id, pending)) {
-            // rollback the in-memory mirror so we re-attempt on the next save
-            synchronized (pendingMilestoneHintSaves) {
-                pendingMilestoneHintSaves.addAll(0, pending);
-            }
             throw new java.sql.SQLException(
                     "coop_character_hint_seen: failed to persist " + pending.size() + " hint(s) for character " + id);
+        }
+        return pending;
+    }
+
+    private void markMilestoneHintSavesCommitted(List<String> committed) {
+        if (committed.isEmpty()) {
+            return;
+        }
+        synchronized (pendingMilestoneHintSaves) {
+            pendingMilestoneHintSaves.removeAll(committed);
         }
     }
 

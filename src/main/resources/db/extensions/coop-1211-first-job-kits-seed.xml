@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Early Game Remix): starter kit contents.
+
+        Deliberately SUPPLEMENTAL: upstream already grants the class weapon
+        inside the job NPC scripts, so this kit adds only what a fresh first
+        job otherwise lacks (potions, town return scrolls and the class
+        ammunition that the upstream scripts hand out inconsistently).
+
+        Item ids verified against wz/String.wz/Consume.img.xml:
+          2000000 Red Potion, 2000003 Blue Potion,
+          2030000 Return Scroll - Nearest Town,
+          2060000 Arrow for Bow, 2070000 Subi Throwing-Stars, 2330000 Bullet.
+
+        jobid 0 = granted to every first job.
+    -->
+    <changeSet id="coop-1211" author="coop">
+        <comment>Co-op Remix 0.1b: seed first-job starter kit contents.</comment>
+
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="0"/>
+            <column name="itemid" valueNumeric="2000000"/>
+            <column name="quantity" valueNumeric="50"/>
+            <column name="note" value="Red Potion for every first job"/>
+        </insert>
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="0"/>
+            <column name="itemid" valueNumeric="2000003"/>
+            <column name="quantity" valueNumeric="50"/>
+            <column name="note" value="Blue Potion for every first job"/>
+        </insert>
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="0"/>
+            <column name="itemid" valueNumeric="2030000"/>
+            <column name="quantity" valueNumeric="5"/>
+            <column name="note" value="Return Scroll - Nearest Town"/>
+        </insert>
+
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="300"/>
+            <column name="itemid" valueNumeric="2060000"/>
+            <column name="quantity" valueNumeric="2000"/>
+            <column name="note" value="Bowman ammunition"/>
+        </insert>
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="400"/>
+            <column name="itemid" valueNumeric="2070000"/>
+            <column name="quantity" valueNumeric="1000"/>
+            <column name="note" value="Thief ammunition"/>
+        </insert>
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="500"/>
+            <column name="itemid" valueNumeric="2330000"/>
+            <column name="quantity" valueNumeric="2000"/>
+            <column name="note" value="Pirate ammunition"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

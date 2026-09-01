@@ -135,3 +135,57 @@ Consequences: Logging into a companion manually is always possible and always
 sees the same state. Character deletion cleans up bindings automatically. The
 companion system can be removed later by dropping one table without leaving
 orphaned character state.
+
+## D11 — Early Game Remix strengthens beginner skills, kits and KPQ entry as data (2026-09-01, accepted)
+
+Context: Levels 1-30 are the least fun part of a solo/small-group server.
+Upstream v83 spreads early-game balance across JavaScript job scripts and
+assumes a large population. GAME_DESIGN pillar 1 (solo-first) requires that no
+content is gated behind party size, and "leveling must stay engaging" argues
+against a pure grind slog.
+
+Decision (owner-approved):
+- **Ultra Beginner Skills are enabled**, i.e. the three existing server-side
+  flags `USE_ULTRA_NIMBLE_FEET`, `USE_ULTRA_RECOVERY` and
+  `USE_ULTRA_THREE_SNAILS`. No new skill was invented; the flags already
+  existed and were off. Beginner jobs additionally get a configurable SP bonus
+  at creation (`coop.early_game.beginner_sp_bonus`) so the three skills are
+  actually usable in levels 1-10.
+- **First-job kits are data, not script edits.** A `coop_first_job_kits` table
+  plus one hook at the end of `Character.changeJob` replaces editing five NPC
+  scripts and five Cygnus quest scripts.
+- **`@training` reports, never teleports.** It is a player command listing
+  level-appropriate maps derived from the map WZ; adding a teleport would turn
+  it into a travel feature with skip potential.
+- **Telemetry is opt-in and adjacent.** Instead of widening upstream
+  `characterexplogs` (which records no level/map/job), a coop table is added;
+  it is off by default and fully asynchronous.
+- **KPQ becomes solo-enterable** (`minPlayers` 3 -> 1), the documented D8
+  follow-up for PQ script minimums.
+
+Consequences: Every number above lives in the `coop:` config block or in a
+database table, so early-game balance is a pure data change with no code edit
+and no client patch. The beginner-skill strengthening is intentionally strong
+but confined to skills that stop being used after the second job. `@training`
+cannot be abused for travel. Telemetry costs nothing while disabled. KPQ remains
+playable by groups of up to 4. Full spec:
+`docs/features/0.1b-early-game-remix.md`.
+
+## D12 — Early-game playtest boundaries are explicit (2026-09-01, accepted)
+
+Context: Release review found that lowering KPQ's entry minimum alone did not
+make its simultaneous-position puzzles soloable, generic EXP telemetry could
+not truthfully identify an award source, and arithmetic first-job detection
+accepted unrelated job IDs.
+
+Decision: KPQ stages 2-4 require `max(0, party size - 1)` occupied positions, so
+a solo leader confirms at Cloto while staying off every puzzle position.
+Telemetry records only positive EXP accepted at pre-award levels 1-30 and labels
+the generic pipeline `UNATTRIBUTED`; it remains disabled in Java defaults but is
+enabled in the checked-in configuration for this owner-approved online
+playtest. First-job kits use the exact Explorer, Cygnus and Aran advancement IDs.
+
+Consequences: Solo KPQ is mechanically completable without a client patch,
+telemetry cannot grow from levels 31-200 or claim false MOB attribution, and
+future job IDs must be deliberately added to the kit policy. Telemetry batching
+is transactional and receives a bounded shutdown drain while the DB is live.

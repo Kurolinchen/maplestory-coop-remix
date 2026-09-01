@@ -16,9 +16,11 @@ import org.slf4j.LoggerFactory;
 import server.maps.MapleMap;
 import tools.DatabaseConnection;
 
+import java.awt.Point;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Optional;
 
 /**
  * Slice B (Companion Bot MVP): orchestrates the lifecycle of a companion
@@ -40,6 +42,7 @@ public final class CompanionLifecycleService {
     private static final Logger log = LoggerFactory.getLogger(CompanionLifecycleService.class);
 
     private static final CompanionLifecycleService INSTANCE = new CompanionLifecycleService();
+    private final CompanionMovementService movement = new CompanionMovementService();
 
     public static CompanionLifecycleService getInstance() {
         return INSTANCE;
@@ -109,6 +112,10 @@ public final class CompanionLifecycleService {
         }
 
         client.setPlayer(bot);
+        if (bot.getParty() != null) {
+            safeLogoff(bot, client);
+            return Result.fail("companion is still a member of another party");
+        }
         try {
             bot.setWorld(session.world());
             // Mirrors the rate initialisation PlayerLoggedinHandler performs.
@@ -118,41 +125,111 @@ public final class CompanionLifecycleService {
                     session.ownerCharacterId(), session.companionCharacterId(), e.getMessage());
         }
 
-        // 1) Attach to the map first so PartyCharacter can read a valid map id.
+        Optional<CompanionMovementService.GroundedPosition> ground =
+                movement.resolveGround(map, owner.getPosition());
+        if (ground.isEmpty()) {
+            safeLogoff(bot, client);
+            return Result.fail("no valid foothold below the owner");
+        }
+
+        bot.setMap(map);
+        bot.setPosition(ground.get().position());
+
+        boolean mapAttached = false;
+        boolean partyJoinAttempted = false;
+        boolean mapPartyRegistered = false;
+        PartyCharacter mpc = null;
+        World wserv = owner.getWorldServer();
         try {
             map.addPlayer(bot);
-        } catch (RuntimeException e) {
-            log.error("Companion map attach failed owner={} companion={}", session.ownerCharacterId(),
-                    session.companionCharacterId(), e);
-            safeLogoff(bot, client);
-            return Result.fail("map attach failed: " + e.getMessage());
-        }
+            mapAttached = true;
+            // Normal clients settle the entering-field y-42 offset with their
+            // first movement packet. Headless companions need that correction
+            // immediately, even in PASSIVE mode.
+            movement.moveAndBroadcast(map, bot, ground.get());
 
-        // 2) Join the owner's real party through the authoritative path.
-        try {
-            PartyCharacter mpc = new PartyCharacter(bot);
-            World wserv = owner.getWorldServer();
-            wserv.updateParty(party.getId(), PartyOperation.JOIN, mpc);
+            mpc = new PartyCharacter(bot);
             bot.setMPC(mpc);
             bot.setParty(party);
-        } catch (RuntimeException e) {
-            log.error("Companion party join failed owner={} companion={}", session.ownerCharacterId(),
-                    session.companionCharacterId(), e);
-            // Roll the map attach back before giving up.
-            try {
-                map.removePlayer(bot);
-            } catch (RuntimeException inner) {
-                log.warn("Rollback of companion map attach failed: {}", inner.getMessage());
+            partyJoinAttempted = true;
+            wserv.updateParty(party.getId(), PartyOperation.JOIN, mpc);
+            mapPartyRegistered = true;
+            map.addPartyMember(bot, party.getId());
+            synchronizePartyHp(bot);
+
+            session.setCompanion(bot);
+            if (!session.compareAndSetState(
+                    CompanionSession.State.NEW, CompanionSession.State.ACTIVE)) {
+                throw new IllegalStateException("session changed state during spawn");
             }
+        } catch (RuntimeException e) {
+            log.error("Companion attach failed owner={} companion={}", session.ownerCharacterId(),
+                    session.companionCharacterId(), e);
+            boolean clean = rollbackSpawn(bot, map, party, mpc, wserv, mapAttached,
+                    partyJoinAttempted, mapPartyRegistered);
+            if (!clean) {
+                session.setCompanion(bot);
+                session.markFailedSpawnRecovery();
+                session.compareAndSetState(
+                        CompanionSession.State.NEW, CompanionSession.State.SAVE_FAILED);
+                return new Result(false,
+                        "attach failed and cleanup is incomplete: " + e.getMessage(), bot);
+            }
+            session.setCompanion(null);
             safeLogoff(bot, client);
-            return Result.fail("party join failed: " + e.getMessage());
+            return Result.fail("attach failed: " + e.getMessage());
         }
 
-        session.compareAndSetState(CompanionSession.State.NEW, CompanionSession.State.ACTIVE);
         log.info("Companion spawned: owner={} companion={} map={} party={}",
                 session.ownerCharacterId(), session.companionCharacterId(),
                 map.getId(), party.getId());
         return Result.ok(bot);
+    }
+
+    static void synchronizePartyHp(Character bot) {
+        bot.receivePartyMemberHP();
+        bot.updatePartyMemberHP();
+    }
+
+    private boolean rollbackSpawn(Character bot, MapleMap map, Party party,
+                                  PartyCharacter mpc, World world,
+                                  boolean mapAttached, boolean partyJoinAttempted,
+                                  boolean mapPartyRegistered) {
+        boolean clean = true;
+        if (partyJoinAttempted && mpc != null) {
+            try {
+                Party authoritative = world.getParty(party.getId());
+                if (authoritative != null && authoritative.getMemberById(bot.getId()) != null) {
+                    world.updateParty(party.getId(), PartyOperation.LEAVE, mpc);
+                }
+            } catch (RuntimeException e) {
+                log.warn("Rollback of companion world-party join failed: {}", e.getMessage());
+                clean = false;
+            }
+        }
+        if (clean && mapPartyRegistered) {
+            try {
+                map.removePartyMember(bot, party.getId());
+            } catch (RuntimeException e) {
+                log.warn("Rollback of companion map-party registration failed: {}", e.getMessage());
+                clean = false;
+            }
+        }
+        if (world.getParty(party.getId()) == null || party.getMemberById(bot.getId()) == null) {
+            bot.setParty(null);
+            bot.setMPC(null);
+        } else {
+            clean = false;
+        }
+        try {
+            if (mapAttached || isAttached(map, bot)) {
+                map.removePlayer(bot);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Rollback of companion map attach failed: {}", e.getMessage());
+            clean = false;
+        }
+        return clean && !isAttached(map, bot);
     }
 
     /**
@@ -173,11 +250,13 @@ public final class CompanionLifecycleService {
             if (session.state() == CompanionSession.State.CLOSED) {
                 return Result.ok(null); // already dismissed; idempotent
             }
-            if (session.state() == CompanionSession.State.SAVE_FAILED) {
-                return Result.fail("a previous save failed; state is being held for retry");
+            boolean dismissing = session.compareAndSetState(
+                    CompanionSession.State.ACTIVE, CompanionSession.State.DISMISSING);
+            if (!dismissing) {
+                dismissing = session.compareAndSetState(
+                        CompanionSession.State.SAVE_FAILED, CompanionSession.State.DISMISSING);
             }
-            if (!session.compareAndSetState(CompanionSession.State.ACTIVE,
-                    CompanionSession.State.DISMISSING)) {
+            if (!dismissing) {
                 return Result.fail("companion is not in a dismissable state: " + session.state());
             }
             return dismissLocked(session, bot);
@@ -202,35 +281,25 @@ public final class CompanionLifecycleService {
                 ? cc : null;
 
         if (bot != null) {
-            // 1) leave the party through the authoritative path
-            try {
-                Party party = bot.getParty();
-                if (party != null) {
-                    World wserv = bot.getWorldServer();
-                    PartyCharacter mpc = bot.getMPC();
-                    if (mpc != null) {
-                        wserv.updateParty(party.getId(), PartyOperation.LEAVE, mpc);
-                    }
-                    bot.setParty(null);
-                    bot.setMPC(null);
-                }
-            } catch (RuntimeException e) {
-                log.warn("Companion party leave failed companion={}: {}",
-                        session.companionCharacterId(), e.getMessage());
+            String detachFailure = detachForSave(bot);
+            if (detachFailure != null) {
+                session.compareAndSetState(CompanionSession.State.DISMISSING,
+                        CompanionSession.State.SAVE_FAILED);
+                return Result.fail(detachFailure);
             }
 
-            // 2) leave the map
-            try {
-                MapleMap map = bot.getMap();
-                if (map != null) {
-                    map.removePlayer(bot);
+            if (session.discardOnRecovery()) {
+                bot.logOff();
+                if (client != null) {
+                    client.detach();
                 }
-            } catch (RuntimeException e) {
-                log.warn("Companion map detach failed companion={}: {}",
-                        session.companionCharacterId(), e.getMessage());
+                session.setCompanion(null);
+                session.compareAndSetState(CompanionSession.State.DISMISSING,
+                        CompanionSession.State.CLOSED);
+                return Result.ok(null);
             }
 
-            // 3) a dead companion must not be persisted at 0 HP. Saving hp=0
+            // A dead companion must not be persisted at 0 HP. Saving hp=0
             //    bricks the character: the next spawn would immediately see
             //    "not alive", dismiss again, and loop forever until someone
             //    logs into the alt and heals it by hand. Restore to a safe
@@ -247,29 +316,77 @@ public final class CompanionLifecycleService {
                 }
             }
 
-            // 4) synchronous save (NOT the autosave variant: the object is about
+            // Synchronous save (NOT the autosave variant: the object is about
             //    to be discarded and a queued save could be lost)
-            try {
-                bot.saveCharToDB(true);
-                bot.logOff();
-                session.markSaveCompleted();
-            } catch (RuntimeException e) {
+            if (!bot.saveCharToDBChecked(true)) {
                 log.error("Companion save failed companion={}; holding session in SAVE_FAILED",
-                        session.companionCharacterId(), e);
+                        session.companionCharacterId());
                 session.compareAndSetState(CompanionSession.State.DISMISSING,
                         CompanionSession.State.SAVE_FAILED);
-                return Result.fail("save failed: " + e.getMessage());
+                return Result.fail("save transaction failed; state held for retry");
             }
+            bot.logOff();
+            session.markSaveCompleted();
         }
 
         if (client != null) {
             client.detach();
         }
+        session.setCompanion(null);
         session.compareAndSetState(CompanionSession.State.DISMISSING,
                 CompanionSession.State.CLOSED);
         log.info("Companion dismissed: owner={} companion={}", session.ownerCharacterId(),
                 session.companionCharacterId());
         return Result.ok(null);
+    }
+
+    private String detachForSave(Character bot) {
+        Party party = bot.getParty();
+        MapleMap map = bot.getMap();
+        if (party != null) {
+            World world = bot.getWorldServer();
+            try {
+                Party authoritative = world.getParty(party.getId());
+                if (authoritative != null && authoritative.getMemberById(bot.getId()) != null) {
+                    PartyCharacter mpc = bot.getMPC();
+                    if (mpc != null) {
+                        world.updateParty(party.getId(), PartyOperation.LEAVE, mpc);
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn("Companion world-party leave failed companion={}: {}",
+                        bot.getId(), e.getMessage());
+                return "world-party detach failed; state held for retry";
+            }
+            Party authoritative = world.getParty(party.getId());
+            if (authoritative != null && authoritative.getMemberById(bot.getId()) != null) {
+                return "world-party still contains companion; state held for retry";
+            }
+            try {
+                if (map != null) {
+                    map.removePartyMember(bot, party.getId());
+                }
+            } catch (RuntimeException e) {
+                log.warn("Companion map-party leave failed companion={}: {}",
+                        bot.getId(), e.getMessage());
+                return "map-party detach failed; state held for retry";
+            }
+            bot.setParty(null);
+            bot.setMPC(null);
+        }
+
+        if (map != null && isAttached(map, bot)) {
+            try {
+                map.removePlayer(bot);
+            } catch (RuntimeException e) {
+                log.warn("Companion map detach failed companion={}: {}",
+                        bot.getId(), e.getMessage());
+            }
+            if (isAttached(map, bot)) {
+                return "map detach failed; state held for retry";
+            }
+        }
+        return null;
     }
 
     private void safeLogoff(Character bot, CompanionClient client) {
@@ -292,35 +409,109 @@ public final class CompanionLifecycleService {
      * <p>The transfer is a plain detach/attach pair: the party membership is
      * untouched, so the companion stays in the owner's party across the hop.
      */
-    public Result transferToMap(Character bot, MapleMap source, MapleMap destination) {
-        if (bot == null || source == null || destination == null) {
-            return Result.fail("transfer requires bot, source and destination");
+    public Result transferToMap(CompanionSession session, Character bot,
+                                MapleMap source, MapleMap destination,
+                                Point destinationAnchor) {
+        if (session == null || bot == null || source == null
+                || destination == null || destinationAnchor == null) {
+            return Result.fail("transfer requires session, bot, source, destination and anchor");
         }
         if (source.getId() == destination.getId()) {
             return Result.fail("source and destination are the same map");
         }
+        Optional<CompanionMovementService.GroundedPosition> destinationGround =
+                movement.resolveGround(destination, destinationAnchor);
+        if (destinationGround.isEmpty()) {
+            return Result.fail("destination has no valid foothold below the owner");
+        }
+
+        Point sourcePosition = bot.getPosition() == null
+                ? null : new Point(bot.getPosition());
+        Optional<CompanionMovementService.GroundedPosition> sourceGround =
+                movement.resolveGround(source, sourcePosition);
+        Party party = bot.getParty();
+        PartyCharacter mpc = bot.getMPC();
+        int previousMpcMapId = mpc == null ? source.getId() : mpc.getMapId();
+        boolean sourceDetached = false;
         try {
             source.removePlayer(bot);
-        } catch (RuntimeException e) {
-            log.error("Companion transfer failed at source detach companion={}: {}",
-                    bot.getId(), e.getMessage());
-            return Result.fail("source detach failed: " + e.getMessage());
-        }
-        try {
+            sourceDetached = true;
+            bot.setMap(destination);
+            bot.setPosition(destinationGround.get().position());
             destination.addPlayer(bot);
-        } catch (RuntimeException e) {
-            log.error("Companion transfer failed at destination attach companion={}: {}",
-                    bot.getId(), e.getMessage());
-            // Put the bot back where it was so we never lose it entirely.
-            try {
-                source.addPlayer(bot);
-            } catch (RuntimeException inner) {
-                log.error("Companion rollback to source map failed companion={}: {}",
-                        bot.getId(), inner.getMessage());
+            movement.moveAndBroadcast(destination, bot, destinationGround.get());
+
+            if (party != null && mpc != null) {
+                mpc.setMapId(destination.getId());
+                bot.getWorldServer().updateParty(
+                        party.getId(), PartyOperation.SILENT_UPDATE, mpc);
+                bot.receivePartyMemberHP();
+                bot.updatePartyMemberHP();
             }
-            return Result.fail("destination attach failed: " + e.getMessage());
+        } catch (RuntimeException e) {
+            log.error("Companion transfer failed companion={}: {}",
+                    bot.getId(), e.getMessage());
+            if (!sourceDetached && !isAttached(source, bot)) {
+                sourceDetached = true;
+            }
+            if (sourceDetached) {
+                boolean restored = rollbackTransfer(bot, source, destination, sourcePosition,
+                        sourceGround, party, mpc, previousMpcMapId);
+                if (!restored) {
+                    session.compareAndSetState(
+                            CompanionSession.State.ACTIVE, CompanionSession.State.SAVE_FAILED);
+                    return Result.fail("transfer failed and map cleanup is incomplete: "
+                            + e.getMessage());
+                }
+            }
+            return Result.fail("transfer failed: " + e.getMessage());
         }
         return Result.ok(bot);
+    }
+
+    private boolean rollbackTransfer(Character bot, MapleMap source, MapleMap destination,
+                                     Point sourcePosition,
+                                     Optional<CompanionMovementService.GroundedPosition> sourceGround,
+                                     Party party, PartyCharacter mpc, int previousMpcMapId) {
+        try {
+            if (isAttached(destination, bot)) {
+                destination.removePlayer(bot);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Companion destination rollback detach failed companion={}: {}",
+                    bot.getId(), e.getMessage());
+        }
+        if (isAttached(destination, bot)) {
+            bot.setMap(destination);
+            if (mpc != null) {
+                mpc.setMapId(destination.getId());
+            }
+            return false;
+        }
+        try {
+            bot.setMap(source);
+            if (sourcePosition != null) {
+                bot.setPosition(sourcePosition);
+            }
+            source.addPlayer(bot);
+            sourceGround.ifPresent(ground -> movement.moveAndBroadcast(source, bot, ground));
+            if (party != null && mpc != null) {
+                mpc.setMapId(previousMpcMapId);
+                bot.getWorldServer().updateParty(
+                        party.getId(), PartyOperation.SILENT_UPDATE, mpc);
+                bot.updatePartyMemberHP();
+            }
+        } catch (RuntimeException e) {
+            log.error("Companion rollback to source map failed companion={}: {}",
+                    bot.getId(), e.getMessage());
+            return false;
+        }
+        return isAttached(source, bot);
+    }
+
+    private static boolean isAttached(MapleMap map, Character bot) {
+        return map.getCharacterById(bot.getId()) == bot
+                || map.getMapObject(bot.getObjectId()) == bot;
     }
 
     /**

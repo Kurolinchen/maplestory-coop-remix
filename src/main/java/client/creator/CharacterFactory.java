@@ -88,6 +88,17 @@ public abstract class CharacterFactory {
             equipped.addItemFromDB(eq_weapon.copy());
         }
 
+        // coop 0.1b (Early Game Remix): beginner jobs get extra SP at creation
+        // so Three Snails / Recovery / Nimble Feet are usable during levels
+        // 1-10. Applied to the recipe because insertNewChar() writes
+        // remainingSp from the recipe; changing the character afterwards would
+        // be overwritten and would need a second DB write.
+        int spBonus = coop.earlygame.BeginnerStart.spBonusFor(
+                recipe.getJob().getId(), coop.config.CoopDefaults.beginnerSpBonus());
+        if (spBonus > 0) {
+            recipe.setRemainingSp(recipe.getRemainingSp() + spBonus);
+        }
+
         if (!MakeCharInfoValidator.isNewCharacterValid(newCharacter)) {
             log.warn("Owner from account {} tried to packet edit in character creation", c.getAccountName());
             return -2;

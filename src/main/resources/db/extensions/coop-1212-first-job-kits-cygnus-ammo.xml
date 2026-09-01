@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1212" author="coop">
+        <comment>Co-op Remix 0.1b: add supplemental Cygnus ranged ammunition.</comment>
+
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="1300"/>
+            <column name="itemid" valueNumeric="2060000"/>
+            <column name="quantity" valueNumeric="2000"/>
+            <column name="note" value="Wind Archer ammunition"/>
+        </insert>
+        <insert tableName="coop_first_job_kits">
+            <column name="jobid" valueNumeric="1400"/>
+            <column name="itemid" valueNumeric="2070000"/>
+            <column name="quantity" valueNumeric="1000"/>
+            <column name="note" value="Night Walker ammunition"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

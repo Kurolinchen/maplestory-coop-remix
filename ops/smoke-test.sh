@@ -9,7 +9,7 @@ load_env
 render_config
 
 log "Starting stack for smoke test..."
-compose up -d
+compose up -d --build
 
 log "Waiting up to ${TIMEOUT_S}s for '$ONLINE_MARKER'..."
 ok=0
@@ -40,7 +40,8 @@ fi
 db_ok=0
 if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
   db_query() {
-    compose exec -T "$DB_SERVICE" mysql -uroot -p"$DB_ROOT_PASSWORD" cosmic -N -B -e "$1" 2>/dev/null
+    compose exec -T "$DB_SERVICE" sh -c \
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot cosmic -N -B -e "$1"' sh "$1" 2>/dev/null
   }
   coop_changesets="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID LIKE 'coop-%';")"
   charslot_default="$(db_query "SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'characterslots';")"
@@ -52,13 +53,20 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
   hint_seen_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_character_hint_seen';")"
   hint_job_filter_col="$(db_query "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_milestone_hints' AND COLUMN_NAME = 'job_filter';")"
   storage_uq="$(db_query "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'storages' AND INDEX_NAME = 'uq_storages_account_world';")"
-  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033','coop-1100');")"
+  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033','coop-1100','coop-1210','coop-1211','coop-1212','coop-1220','coop-1221');")"
   wrong_stack_rows="$(db_query "SELECT COUNT(*) FROM coop_stack_overrides WHERE item_id IN (2100000,2100001,2100002,4001000,4001001,4001002,4001010,4001011,4001012);")"
   coop_1100_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID = 'coop-1100';")"
   companion_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_companion_bindings';")"
   companion_uq="$(db_query "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_companion_bindings' AND INDEX_NAME = 'uq_coop_companion_companion';")"
+  # coop 0.1b Early Game Remix: starter kits, their seed rows and the
+  # early-game telemetry table must all be present.
+  kits_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_first_job_kits';")"
+  kits_seed="$(db_query "SELECT COUNT(*) FROM coop_first_job_kits;")"
+  cygnus_ammo="$(db_query "SELECT COUNT(*) FROM coop_first_job_kits WHERE (jobid = 1300 AND itemid = 2060000 AND quantity = 2000) OR (jobid = 1400 AND itemid = 2070000 AND quantity = 1000);")"
+  telemetry_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_early_game_exp_log';")"
+  telemetry_source_default="$(db_query "SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_early_game_exp_log' AND COLUMN_NAME = 'source';")"
 
-  expected_ids=12
+  expected_ids=17
   if [[ "$coop_changesets" -ge "$expected_ids" \
         && "$coop_ids_present" -eq "$expected_ids" \
         && "$charslot_default" == "15" \
@@ -72,8 +80,13 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
         && "$storage_uq" -ge 1 \
         && "$coop_1100_present" -eq 1 \
         && "$companion_table" -eq 1 \
-        && "$companion_uq" -ge 1 ]]; then
-    log "DB checks passed: ${coop_changesets} coop changesets (${coop_ids_present}/${expected_ids} expected), charslots=${charslot_default}, useslots=${useslots_default}, stack overrides=${stack_overrides}, hints=${hint_rows}, hint table+col=${hint_seen_table}/${hint_job_filter_col}, wrong-family rows=${wrong_stack_rows}, storage dupes=${storage_dupes}, uq=${storage_uq}, companion table=${companion_table} uq=${companion_uq}."
+        && "$companion_uq" -ge 1 \
+        && "$kits_table" -eq 1 \
+        && "$kits_seed" -ge 8 \
+        && "$cygnus_ammo" -eq 2 \
+        && "$telemetry_table" -eq 1 \
+        && "$telemetry_source_default" == "UNATTRIBUTED" ]]; then
+    log "DB checks passed: ${coop_changesets} coop changesets (${coop_ids_present}/${expected_ids} expected), charslots=${charslot_default}, useslots=${useslots_default}, stack overrides=${stack_overrides}, hints=${hint_rows}, hint table+col=${hint_seen_table}/${hint_job_filter_col}, wrong-family rows=${wrong_stack_rows}, storage dupes=${storage_dupes}, uq=${storage_uq}, companion table=${companion_table} uq=${companion_uq}, kits table=${kits_table} rows=${kits_seed} cygnus=${cygnus_ammo}, telemetry table=${telemetry_table} source=${telemetry_source_default}."
     db_ok=1
   else
     warn "DB checks failed:"
@@ -90,6 +103,11 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
     warn "  coop-1100 applied: ${coop_1100_present:-<error>} (expected 1)"
     warn "  companion bindings table: ${companion_table:-<error>} (expected 1)"
     warn "  companion unique index: ${companion_uq:-<error>} (expected >= 1)"
+    warn "  first-job kits table: ${kits_table:-<error>} (expected 1)"
+    warn "  first-job kits rows: ${kits_seed:-<error>} (expected >= 8)"
+    warn "  Cygnus ammunition rows: ${cygnus_ammo:-<error>} (expected 2)"
+    warn "  early-game telemetry table: ${telemetry_table:-<error>} (expected 1)"
+    warn "  telemetry source default: ${telemetry_source_default:-<error>} (expected UNATTRIBUTED)"
   fi
 fi
 

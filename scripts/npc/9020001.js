@@ -66,13 +66,69 @@ function clearStage(stage, eim, curMap) {
     eim.linkToNextStage(stage, "kpq", curMap);  //opens the portal to the next map
 }
 
+// coop 0.1b (Early Game Remix, DECISIONS.md D11): the upstream stage logic
+// hardcodes combinations with exactly THREE occupied spots, so a solo runner
+// would be permanently stuck at stage 2. These stages are pure "stand on the
+// right spots" puzzles, so the correct fix is to scale the number of required
+// spots to the non-leader party members - no client patch and no content is skipped.
+function requiredPuzzleSpots(playerCount, spotCount) {
+    return Math.max(0, Math.min(playerCount - 1, spotCount));
+}
+
+function combosForTeamSize(spotCount, teamSize) {
+    var result = [];
+    var total = 1 << spotCount;
+    for (var mask = 0; mask < total; mask++) {
+        var bits = 0;
+        for (var i = 0; i < spotCount; i++) {
+            if (mask & (1 << i)) {
+                bits++;
+            }
+        }
+        if (bits !== teamSize) {
+            continue;
+        }
+        var combo = [];
+        for (var j = 0; j < spotCount; j++) {
+            combo.push((mask & (1 << j)) ? 1 : 0);
+        }
+        result.push(combo);
+    }
+    return result;
+}
+
+// Stage instructions must describe the CURRENT team: upstream hardcodes "3",
+// which is wrong for a solo runner (DECISIONS.md D11).
+function stageIntroText(eim, nthtext, nthobj, nthverb, nthpos, areaRects) {
+    var n = requiredPuzzleSpots(eim.getPlayerCount(), areaRects.length);
+    return "Hi. Welcome to the " + nthtext + " stage. Next to me, you'll see a number of " + nthobj
+            + ". Out of these " + nthobj + ", #b" + n + " are connected to the portal that sends you to the next stage#k."
+            + " All you need to do is have #b" + n + " party member(s) find the correct " + nthobj + " and " + nthverb + " on them.#k\r\n"
+            + "BUT, it doesn't count as an answer if you " + nthpos + "; please be near the middle of the " + nthobj
+            + " to be counted as a correct answer. Also, only " + n + " member(s) of your party are allowed on the " + nthobj + "."
+            + " Once they are " + nthverb + "ing on them, the leader of the party must #bdouble-click me to check and see if the answer's correct or not#k."
+            + " Now, find the right " + nthobj + " to " + nthverb + " on!";
+}
+
 function rectangleStages(eim, property, areaCombos, areaRects) {
+    var teamSize = requiredPuzzleSpots(eim.getPlayerCount(), areaRects.length);
+    var combos = combosForTeamSize(areaRects.length, teamSize);
+    if (combos.length === 0) {
+        combos = areaCombos;
+    }
+
     var c = eim.getProperty(property);
     if (c == null) {
-        c = Math.floor(Math.random() * areaCombos.length);
+        c = Math.floor(Math.random() * combos.length);
         eim.setProperty(property, c.toString());
     } else {
         c = parseInt(c);
+        // The team size can change if someone leaves; a stale index would then
+        // point outside the current combination list, so re-roll it.
+        if (isNaN(c) || c < 0 || c >= combos.length) {
+            c = Math.floor(Math.random() * combos.length);
+            eim.setProperty(property, c.toString());
+        }
     }
 
     // get player placement
@@ -88,7 +144,7 @@ function rectangleStages(eim, property, areaCombos, areaRects) {
         }
     }
 
-    var curCombo = areaCombos[c];
+    var curCombo = combos[c];
     var accept = true;
     for (var j = 0; j < curCombo.length; j++) {
         if (curCombo[j] != playerPlacement[j]) {
@@ -134,8 +190,20 @@ function action(mode, type, selection) {
                     cm.sendNext("Incredible! You cleared all the stages to get to this point. Here's a small prize for your job well done. Before you accept it, however, please make sure your use and etc. inventories have empty slots available.");
                 }
             } else if (curMap == 103000800) {   // stage 1
-                if (cm.isEventLeader()) {
-                    var numpasses = eim.getPlayerCount() - 1;     // minus leader
+                // coop 0.1b (DECISIONS.md D11): a solo entrant is always the
+                // event leader, so upstream sends them to the "collect N
+                // passes" branch - which demands a pass that only the quiz
+                // branch below ever grants. Solo runners therefore stay in the
+                // quiz branch and spend the pass themselves.
+                var solo = eim.getPlayerCount() <= 1;
+
+                if (solo && cm.itemQuantity(4001008) >= 1) {
+                    cm.sendNext("That's the pass you earned! Congratulations on clearing the stage! I'll make the portal that sends you to the next stage. There's a time limit on getting there, so please hurry.");
+                    clearStage(stage, eim, curMap);
+                    eim.gridClear();
+                    cm.gainItem(4001008, -1);
+                } else if (cm.isEventLeader() && !solo) {
+                    var numpasses = eim.getPlayerCount() - 1;   // minus leader
 
                     if (cm.hasItem(4001008, numpasses)) {
                         cm.sendNext("You gathered up " + numpasses + " passes! Congratulations on clearing the stage! I'll make the portal that sends you to the next stage. There's a time limit on getting there, so please hurry. Best of luck to you all!");
@@ -149,7 +217,11 @@ function action(mode, type, selection) {
                     var data = eim.gridCheck(cm.getPlayer());
 
                     if (data == 0) {
-                        cm.sendNext("Thanks for bringing me the coupons. Please hand the pass to your party leader to continue.");
+                        if (solo) {
+                            cm.sendNext("You already answered the question, but you no longer carry the pass. Re-enter the quest to try again.");
+                        } else {
+                            cm.sendNext("Thanks for bringing me the coupons. Please hand the pass to your party leader to continue.");
+                        }
                     } else if (data == -1) {
                         data = Math.floor(Math.random() * stage1Questions.length) + 1;   //data will be counted from 1
                         eim.gridInsert(cm.getPlayer(), data);
@@ -183,8 +255,9 @@ function action(mode, type, selection) {
                 if (!eim.isEventLeader(cm.getPlayer())) {
                     cm.sendOk("Follow the instructions given by your party leader to proceed through this stage.");
                 } else if (eim.getProperty(stgProperty) == null) {
-                    cm.sendNext("Hi. Welcome to the " + nthtext + " stage. Next to me, you'll see a number of " + nthobj + ". Out of these " + nthobj + ", #b3 are connected to the portal that sends you to the next stage#k. All you need to do is have #b3 party members find the correct " + nthobj + " and " + nthverb + " on them.#k\r\nBUT, it doesn't count as an answer if you " + nthpos + "; please be near the middle of the " + nthobj + " to be counted as a correct answer. Also, only 3 members of your party are allowed on the " + nthobj + ". Once they are " + nthverb + "ing on them, the leader of the party must #bdouble-click me to check and see if the answer's correct or not#k. Now, find the right " + nthobj + " to " + nthverb + " on!");
-                    var c = Math.floor(Math.random() * stgCombos.length);
+                    cm.sendNext(stageIntroText(eim, nthtext, nthobj, nthverb, nthpos, stgAreas));
+                    var c = Math.floor(Math.random() * combosForTeamSize(stgAreas.length,
+                            requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length)).length);
                     eim.setProperty(stgProperty, c.toString());
                 } else {
                     var accept = rectangleStages(eim, stgProperty, stgCombos, stgAreas);
@@ -194,7 +267,8 @@ function action(mode, type, selection) {
                         cm.sendNext("Please hurry on to the next stage, the portal opened!");
                     } else {
                         eim.showWrongEffect();
-                        cm.sendNext("It looks like you haven't found the 3 " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only 3 are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
+                        var requiredSpots = requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length);
+                        cm.sendNext("It looks like you haven't found the " + requiredSpots + " " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only " + requiredSpots + " are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
                     }
                 }
 
@@ -210,8 +284,9 @@ function action(mode, type, selection) {
                 if (!eim.isEventLeader(cm.getPlayer())) {
                     cm.sendOk("Follow the instructions given by your party leader to proceed through this stage.");
                 } else if (eim.getProperty(stgProperty) == null) {
-                    cm.sendNext("Hi. Welcome to the " + nthtext + " stage. Next to me, you'll see a number of " + nthobj + ". Out of these " + nthobj + ", #b3 are connected to the portal that sends you to the next stage#k. All you need to do is have #b3 party members find the correct " + nthobj + " and " + nthverb + " on them.#k\r\nBUT, it doesn't count as an answer if you " + nthpos + "; please be near the middle of the " + nthobj + " to be counted as a correct answer. Also, only 3 members of your party are allowed on the " + nthobj + ". Once they are " + nthverb + "ing on them, the leader of the party must #bdouble-click me to check and see if the answer's correct or not#k. Now, find the right " + nthobj + " to " + nthverb + " on!");
-                    var c = Math.floor(Math.random() * stgCombos.length);
+                    cm.sendNext(stageIntroText(eim, nthtext, nthobj, nthverb, nthpos, stgAreas));
+                    var c = Math.floor(Math.random() * combosForTeamSize(stgAreas.length,
+                            requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length)).length);
                     eim.setProperty(stgProperty, c.toString());
                 } else {
                     var accept = rectangleStages(eim, stgProperty, stgCombos, stgAreas);
@@ -221,7 +296,8 @@ function action(mode, type, selection) {
                         cm.sendNext("Please hurry on to the next stage, the portal opened!");
                     } else {
                         eim.showWrongEffect();
-                        cm.sendNext("It looks like you haven't found the 3 " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only 3 are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
+                        var requiredSpots = requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length);
+                        cm.sendNext("It looks like you haven't found the " + requiredSpots + " " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only " + requiredSpots + " are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
                     }
                 }
 
@@ -237,8 +313,9 @@ function action(mode, type, selection) {
                 if (!eim.isEventLeader(cm.getPlayer())) {
                     cm.sendOk("Follow the instructions given by your party leader to proceed through this stage.");
                 } else if (eim.getProperty(stgProperty) == null) {
-                    cm.sendNext("Hi. Welcome to the " + nthtext + " stage. Next to me, you'll see a number of " + nthobj + ". Out of these " + nthobj + ", #b3 are connected to the portal that sends you to the next stage#k. All you need to do is have #b3 party members find the correct " + nthobj + " and " + nthverb + " on them.#k\r\nBUT, it doesn't count as an answer if you " + nthpos + "; please be near the middle of the " + nthobj + " to be counted as a correct answer. Also, only 3 members of your party are allowed on the " + nthobj + ". Once they are " + nthverb + "ing on them, the leader of the party must #bdouble-click me to check and see if the answer's correct or not#k. Now, find the right " + nthobj + " to " + nthverb + " on!");
-                    var c = Math.floor(Math.random() * stgCombos.length);
+                    cm.sendNext(stageIntroText(eim, nthtext, nthobj, nthverb, nthpos, stgAreas));
+                    var c = Math.floor(Math.random() * combosForTeamSize(stgAreas.length,
+                            requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length)).length);
                     eim.setProperty(stgProperty, c.toString());
                 } else {
                     var accept = rectangleStages(eim, stgProperty, stgCombos, stgAreas);
@@ -248,7 +325,8 @@ function action(mode, type, selection) {
                         cm.sendNext("Please hurry on to the next stage, the portal opened!");
                     } else {
                         eim.showWrongEffect();
-                        cm.sendNext("It looks like you haven't found the 3 " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only 3 are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
+                        var requiredSpots = requiredPuzzleSpots(eim.getPlayerCount(), stgAreas.length);
+                        cm.sendNext("It looks like you haven't found the " + requiredSpots + " " + nthobj + " just yet. Please think of a different combination of " + nthobj + ". Only " + requiredSpots + " are allowed to " + nthverb + " on " + nthobj + ", and if you " + nthpos + " it may not count as an answer, so please keep that in mind. Keep going!");
                     }
                 }
 

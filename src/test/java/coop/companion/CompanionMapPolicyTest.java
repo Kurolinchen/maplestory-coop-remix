@@ -8,6 +8,7 @@ package coop.companion;
 import coop.config.CoopConfig;
 import coop.config.CoopDefaults;
 import org.junit.jupiter.api.Test;
+import server.maps.MapleMap;
 import server.maps.Portal;
 
 import java.awt.Point;
@@ -63,6 +64,31 @@ class CompanionMapPolicyTest {
     void blockedMapsCoverSpecialRanges() {
         assertTrue(CompanionMapPolicy.isBlocked(910_010_000));
         assertFalse(CompanionMapPolicy.isBlocked(100_000_000));
+    }
+
+    @Test
+    void mapIdFallbackWithoutScriptDoesNotBlockAllowedTrainingMap() {
+        MapleMap map = fakeMap(100_020_000, "100020000", "100020000");
+
+        assertFalse(CompanionMapPolicy.hasEntryScript(map));
+        assertTrue(CompanionMapPolicy.canHost(map));
+    }
+
+    @Test
+    void namedEntryScriptRemainsBlocked() {
+        MapleMap map = fakeMap(100_020_000, "explorationPoint", "100020000");
+
+        assertTrue(CompanionMapPolicy.hasEntryScript(map));
+        assertFalse(CompanionMapPolicy.canHost(map));
+    }
+
+    @Test
+    void numericFallbackIsBlockedOnlyWhenItsHookScriptExists() {
+        MapleMap scripted = fakeMap(200_090_000, "200090000", "");
+        MapleMap wrongHook = fakeMap(200_090_000, "", "200090000");
+
+        assertTrue(CompanionMapPolicy.hasEntryScript(scripted));
+        assertFalse(CompanionMapPolicy.hasEntryScript(wrongHook));
     }
 
     @Test
@@ -154,6 +180,13 @@ class CompanionMapPolicyTest {
         assertEquals(null, controller.findFollowPortal(null, 100_000_000, new Point(0, 0)));
         assertEquals(null, controller.findFollowPortal(
                 null, 100_000_000, null), "a null reference point must not throw");
+    }
+
+    private static MapleMap fakeMap(int mapId, String onUserEnter, String onFirstUserEnter) {
+        MapleMap map = new MapleMap(mapId, 0, 1, 100_000_000, 1.0f);
+        map.setOnUserEnter(onUserEnter);
+        map.setOnFirstUserEnter(onFirstUserEnter);
+        return map;
     }
 
     /** Minimal Portal stub; only the fields the policy reads are meaningful. */

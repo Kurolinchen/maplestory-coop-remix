@@ -1968,6 +1968,11 @@ public class Server {
             }
         }
 
+        // coop 0.1b: all character EXP producers are stopped and the DB pool is
+        // still available. The telemetry lifecycle can be started again by an
+        // in-process server restart.
+        coop.earlygame.EarlyGameTelemetry.shutdown();
+
         resetServerWorlds();
 
         ThreadManager.getInstance().stop();
