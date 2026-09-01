@@ -23,6 +23,7 @@ import client.inventory.InventoryType;
 import client.inventory.Item;
 import client.inventory.ItemFactory;
 import constants.game.GameConstants;
+import coop.config.CoopDefaults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import provider.Data;
@@ -70,10 +71,12 @@ public class Storage {
     }
 
     private static Storage create(int id, int world) throws SQLException {
+        // coop 0.1: initial storage size is configurable (coop.default_storage_slots)
         try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement ps = con.prepareStatement("INSERT INTO storages (accountid, world, slots, meso) VALUES (?, ?, 4, 0)")) {
+             PreparedStatement ps = con.prepareStatement("INSERT INTO storages (accountid, world, slots, meso) VALUES (?, ?, ?, 0)")) {
             ps.setInt(1, id);
             ps.setInt(2, world);
+            ps.setInt(3, CoopDefaults.defaultStorageSlots());
             ps.executeUpdate();
         }
 
@@ -110,8 +113,9 @@ public class Storage {
     }
 
     public boolean canGainSlots(int slots) {
+        // coop 0.1: storage cap is configurable (coop.storage_slot_cap)
         slots += this.slots;
-        return slots <= 48;
+        return slots <= CoopDefaults.storageSlotCap();
     }
 
     public boolean gainSlots(int slots) {

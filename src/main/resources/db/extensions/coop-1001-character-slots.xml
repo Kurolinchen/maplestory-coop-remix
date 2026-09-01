@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1001" author="coop">
+        <comment>Co-op Remix 0.1: new accounts start with more character slots. AUTOMATIC_REGISTER writes coop.default_character_slots; this DB column default is the fallback for accounts created elsewhere. Bump-only, never reduces purchased slots.</comment>
+        <sql>ALTER TABLE accounts ALTER characterslots SET DEFAULT 15;</sql>
+        <sql>UPDATE accounts SET characterslots = GREATEST(characterslots, 15);</sql>
+    </changeSet>
+
+</databaseChangeLog>

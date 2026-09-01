@@ -22,7 +22,7 @@
 
 package server.expeditions;
 
-import config.YamlConfig;
+import coop.expedition.ExpeditionRules;
 
 /**
  * @author Alan (SharpAceX)
@@ -58,7 +58,9 @@ public enum ExpeditionType {
     }
 
     public int getMinSize() {
-        return !YamlConfig.config.server.USE_ENABLE_SOLO_EXPEDITIONS ? minSize : 1;
+        // coop 0.1: solo-first sizing (USE_ENABLE_SOLO_EXPEDITIONS + optional per-type
+        // overrides from coop.expedition_min_size), see DECISIONS.md D8
+        return ExpeditionRules.effectiveMinSize(this, minSize);
     }
 
     public int getMaxSize() {

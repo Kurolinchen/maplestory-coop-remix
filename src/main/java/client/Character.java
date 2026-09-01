@@ -42,6 +42,7 @@ import client.newyear.NewYearCardRecord;
 import client.processor.action.PetAutopotProcessor;
 import client.processor.npc.FredrickProcessor;
 import config.YamlConfig;
+import coop.config.CoopDefaults;
 import constants.game.ExpTable;
 import constants.game.GameConstants;
 import constants.id.ItemId;
@@ -404,7 +405,8 @@ public class Character extends AbstractCharacterObject {
         savedLocations = new SavedLocation[SavedLocationType.values().length];
 
         for (InventoryType type : InventoryType.values()) {
-            byte b = 24;
+            // coop 0.1: default inventory size is configurable (coop.default_inventory_slots)
+            byte b = (byte) CoopDefaults.defaultInventorySlots();
             if (type == InventoryType.CASH) {
                 b = 96;
             }
@@ -469,12 +471,13 @@ public class Character extends AbstractCharacterObject {
         ret.job = Job.BEGINNER;
         ret.level = 1;
         ret.accountid = c.getAccID();
-        ret.buddylist = new BuddyList(20);
+        ret.buddylist = new BuddyList(CoopDefaults.buddyDefaultCapacity());
         ret.maplemount = null;
-        ret.getInventory(InventoryType.EQUIP).setSlotLimit(24);
-        ret.getInventory(InventoryType.USE).setSlotLimit(24);
-        ret.getInventory(InventoryType.SETUP).setSlotLimit(24);
-        ret.getInventory(InventoryType.ETC).setSlotLimit(24);
+        // coop 0.1: default inventory size is configurable (coop.default_inventory_slots)
+        ret.getInventory(InventoryType.EQUIP).setSlotLimit(CoopDefaults.defaultInventorySlots());
+        ret.getInventory(InventoryType.USE).setSlotLimit(CoopDefaults.defaultInventorySlots());
+        ret.getInventory(InventoryType.SETUP).setSlotLimit(CoopDefaults.defaultInventorySlots());
+        ret.getInventory(InventoryType.ETC).setSlotLimit(CoopDefaults.defaultInventorySlots());
 
         // Select a keybinding method
         int[] selectedKey;
@@ -6459,17 +6462,32 @@ public class Character extends AbstractCharacterObject {
             if (InventoryManipulator.checkSpace(client, ItemId.PERFECT_PITCH, (short) 1, "")) {
                 InventoryManipulator.addById(client, ItemId.PERFECT_PITCH, (short) 1, "", -1);
             }
-        } else if (level == 10) {
+        } else if (level >= 10 && !sawMilestoneHint("starter-party-leave")) {
+            // coop 0.1: catch up the trigger for players who joined already above lv9; the
+            // dataString guard ensures the hint fires exactly once per character.
             Runnable r = new Runnable() {
                 @Override
                 public void run() {
                     if (leaveParty()) {
                         showHint("You have reached #blevel 10#k, therefore you must leave your #rstarter party#k.");
                     }
+                    setMilestoneHintSeen("starter-party-leave");
                 }
             };
 
             ThreadManager.getInstance().newTask(r);
+        }
+
+        // coop 0.1: deliver milestone onboarding hints for the levels we just crossed.
+        for (coop.onboarding.MilestoneHints.HintEntry hint : coop.onboarding.MilestoneHints.forLevel(level)) {
+            if (hint.minLevel() < level) {
+                continue; // only trigger when the level *crosses* the threshold
+            }
+            if (sawMilestoneHint(hint.id())) {
+                continue;
+            }
+            showHint(hint.text());
+            setMilestoneHintSeen(hint.id());
         }
 
         guildUpdate();
@@ -10225,6 +10243,25 @@ public class Character extends AbstractCharacterObject {
         if (!dataString.contains(partyquestchar)) {
             this.dataString += partyquestchar;
         }
+    }
+
+    // coop 0.1: persisted record of onboarding hints the character has already seen.
+    // The marker is suffixed to dataString, sharing the same character column.
+    private static final String HINT_MARKER_PREFIX = "MSH:";
+
+    public boolean sawMilestoneHint(String hintId) {
+        if (hintId == null || hintId.isBlank() || dataString == null) {
+            return false;
+        }
+        return dataString.contains(HINT_MARKER_PREFIX + hintId);
+    }
+
+    public void setMilestoneHintSeen(String hintId) {
+        if (hintId == null || hintId.isBlank() || sawMilestoneHint(hintId)) {
+            return;
+        }
+        String marker = HINT_MARKER_PREFIX + hintId;
+        this.dataString = (dataString == null ? "" : dataString) + marker;
     }
 
     public void createDragon() {

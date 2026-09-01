@@ -55,7 +55,9 @@ public class StorageProcessor {
         byte mode = p.readByte();
 
         if (chr.getLevel() < 15) {
+            // coop 0.1: turn the silent "level too low" gate into a coaching hint on first contact.
             chr.dropMessage(1, "You may only use the storage once you have reached level 15.");
+            chr.showHint("Storage unlocks at #blevel 15#k. Keep questing in Henesys or Kerning to get there.");
             c.sendPacket(PacketCreator.enableActions());
             return;
         }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1003" author="coop">
+        <comment>Co-op Remix 0.1: existing account storages bumped to at least the new default (config: coop.default_storage_slots). Bump-only.</comment>
+        <sql>UPDATE storages SET slots = GREATEST(slots, 16);</sql>
+    </changeSet>
+
+</databaseChangeLog>

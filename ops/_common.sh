@@ -66,11 +66,16 @@ render_config() {
 }
 
 # docker CLI wrapper: works even if the current session lacks the docker group.
+# Arguments are re-quoted with %q so values containing spaces/quotes survive sg's shell.
 docker_cli() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
   elif command -v sg >/dev/null 2>&1 && sg docker -c "docker info" >/dev/null 2>&1; then
-    sg docker -c "docker $*"
+    local quoted="" arg
+    for arg in "$@"; do
+      quoted+=" $(printf '%q' "$arg")"
+    done
+    sg docker -c "docker${quoted}"
   else
     die "Docker is not usable in this session. Start the daemon / re-login for the docker group."
   fi

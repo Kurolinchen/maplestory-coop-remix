@@ -80,6 +80,7 @@ ops/smoke-test.sh       # boot server, wait for "Cosmic is now online", verify, 
 ops/backup-dev-db.sh    # dump dev DB to ops/backups/
 ops/restore-dev-db.sh   # restore a dump (asks for confirmation)
 ops/reset-dev-db.sh     # DESTRUCTIVE: wipe dev DB volume (double confirmation)
+ops/rotate-dev-db-pass.sh # rotate dev DB root password (see docs/DEPLOYMENT.md)
 ```
 
 ## Game design north star (short form)

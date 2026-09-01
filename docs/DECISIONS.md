@@ -61,3 +61,27 @@ Consequences: One place to change behavior; permission rules can target `ops/…
 Context: Upstream commits `mvnw` without the executable bit (mode 100644).
 Decision: Never chmod it; run `sh ./mvnw …` (wrapped by ops scripts).
 Consequences: No diff against upstream file modes.
+
+## D7 — HP-wash redesign deferred from 0.1 to 0.2; own `coop:` config block (2026-08-30, accepted)
+
+Context: ROADMAP 0.1 lists "remove/redesign HP-wash dependency", but the mechanic spans
+level-up HP/MP rolls (Character.levelUp), job-change rolls, AP-reset math
+(AssignAPProcessor) and persisted `hpMpApUsed` state, gated by three live flags. Changing
+curves without the data-driven progression framework (0.2) would be unreviewable guesswork.
+Additionally, milestone 0.1 introduces the first custom config numbers and must not scatter
+them into upstream-owned `ServerConfig`/`WorldConfig` (merge friction on every upstream sync).
+Decision (owner-approved): HP-wash stays untouched in 0.1 and is redesigned data-driven in
+0.2. Custom QoL numbers live in a new top-level `coop:` block in `config.yaml`, parsed into
+`coop/config/CoopConfig` (one added field in `config/YamlConfig.java`), accessed via
+null-safe `coop/config/CoopDefaults`.
+Consequences: 0.1 stays reviewable; 0.2 owns the HP/MP curve redesign; future custom systems
+add keys to the `coop:` block instead of upstream config classes.
+
+## D8 — Solo expeditions default-on incl. Zakum prequest bypass (2026-08-30, accepted)
+
+Context: GAME_DESIGN pillar 1 (solo-first) requires no content gated behind party minimums.
+Upstream `USE_ENABLE_SOLO_EXPEDITIONS` also bypasses Zakum prequests when enabled.
+Decision (owner-approved): set `USE_ENABLE_SOLO_EXPEDITIONS: true`; expedition minimum sizes
+become configurable per type via `coop.expedition_min_size`. Party cap stays 6 (client UI).
+Consequences: Any boss expedition is solo-enterable; prequest gating is off; PQ script
+`minPlayers` relaxation is a documented per-script follow-up (see 0.1 feature spec).

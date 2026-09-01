@@ -2,6 +2,7 @@ package config;
 
 import com.esotericsoftware.yamlbeans.YamlReader;
 import constants.string.CharsetConstants;
+import coop.config.CoopConfig;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -16,6 +17,8 @@ public class YamlConfig {
 
     public List<WorldConfig> worlds;
     public ServerConfig server;
+    // coop 0.1: custom "coop:" block (DECISIONS.md D7); null when absent from config.yaml
+    public CoopConfig coop;
 
     private static YamlConfig loadConfig() {
         try {

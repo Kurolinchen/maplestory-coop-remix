@@ -14,7 +14,8 @@ compose up -d
 log "Waiting up to ${TIMEOUT_S}s for '$ONLINE_MARKER'..."
 ok=0
 for _ in $(seq 1 "$TIMEOUT_S"); do
-  if compose logs "$SERVER_SERVICE" 2>/dev/null | grep -q "$ONLINE_MARKER"; then
+  # note: grep without -q (and >/dev/null) so docker logs is not SIGPIPE'd under pipefail
+  if compose logs "$SERVER_SERVICE" 2>/dev/null | grep "$ONLINE_MARKER" >/dev/null 2>&1; then
     ok=1
     break
   fi
@@ -33,8 +34,25 @@ if (exec 3<>/dev/tcp/127.0.0.1/8484) 2>/dev/null; then
   port_ok=1
 fi
 
+# coop 0.1: DB assertions for the custom Liquibase changesets (db/extensions/coop-*).
+db_ok=0
 if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
-  log "SMOKE TEST PASSED: server online, login port 8484 reachable."
+  db_query() {
+    compose exec -T "$DB_SERVICE" mysql -uroot -p"$DB_ROOT_PASSWORD" cosmic -N -B -e "$1" 2>/dev/null
+  }
+  coop_changesets="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID LIKE 'coop-%';")"
+  charslot_default="$(db_query "SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'characterslots';")"
+  stack_overrides="$(db_query "SELECT COUNT(*) FROM coop_stack_overrides;")"
+  if [[ "$coop_changesets" -ge 6 && "$charslot_default" == "15" && "$stack_overrides" -ge 11 ]]; then
+    log "DB checks passed: ${coop_changesets} coop changesets, characterslots default ${charslot_default}, ${stack_overrides} stack override(s)."
+    db_ok=1
+  else
+    warn "DB checks failed: coop changesets=${coop_changesets:-<error>}, characterslots default=${charslot_default:-<error>}, stack overrides=${stack_overrides:-<error>}."
+  fi
+fi
+
+if [[ "$ok" == 1 && "$port_ok" == 1 && "$db_ok" == 1 ]]; then
+  log "SMOKE TEST PASSED: server online, login port 8484 reachable, coop migrations applied."
   result=0
 else
   [[ "$ok" == 1 ]] || warn "Online marker not found within ${TIMEOUT_S}s."

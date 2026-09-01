@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1002" author="coop">
+        <comment>Co-op Remix 0.1: new characters start with bigger inventories (config: coop.default_inventory_slots). Bump-only, never reduces grown slots.</comment>
+        <sql>ALTER TABLE characters ALTER equipslots SET DEFAULT 32;</sql>
+        <sql>ALTER TABLE characters ALTER useslots SET DEFAULT 32;</sql>
+        <sql>ALTER TABLE characters ALTER setupslots SET DEFAULT 32;</sql>
+        <sql>ALTER TABLE characters ALTER etcslots SET DEFAULT 32;</sql>
+        <sql>UPDATE characters
+             SET equipslots = GREATEST(equipslots, 32),
+                 useslots = GREATEST(useslots, 32),
+                 setupslots = GREATEST(setupslots, 32),
+                 etcslots = GREATEST(etcslots, 32);</sql>
+    </changeSet>
+
+</databaseChangeLog>

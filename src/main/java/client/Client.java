@@ -25,6 +25,7 @@ import client.inventory.InventoryType;
 import config.YamlConfig;
 import constants.game.GameConstants;
 import constants.id.MapId;
+import coop.config.CoopDefaults;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -1379,7 +1380,8 @@ public class Client extends ChannelInboundHandlerAdapter {
     }
 
     public boolean canGainCharacterSlot() {
-        return characterSlots < 15;
+        // coop 0.1: cap is configurable (coop.max_character_slots) instead of hardcoded 15
+        return characterSlots < CoopDefaults.maxCharacterSlots();
     }
 
     public synchronized boolean gainCharacterSlot() {
@@ -1396,6 +1398,25 @@ public class Client extends ChannelInboundHandlerAdapter {
             return true;
         }
         return false;
+    }
+
+    /**
+     * coop 0.1: GM/dev tooling sets an exact slot count (persisted), unlike
+     * {@link #gainCharacterSlot()} which only increments by one.
+     */
+    public synchronized void setCharacterSlotsPersistent(int slots) {
+        try (Connection con = DatabaseConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement("UPDATE accounts SET characterslots = ? WHERE id = ?")) {
+            ps.setInt(1, slots);
+            ps.setInt(2, accId);
+            if (ps.executeUpdate() > 0) {
+                this.characterSlots = (byte) slots;
+            } else {
+                log.warn("Could not persist character slot count {} for account {}", slots, accId);
+            }
+        } catch (SQLException e) {
+            log.error("Failed to persist character slot count {} for account {}", slots, accId, e);
+        }
     }
 
     public final byte getGReason() {

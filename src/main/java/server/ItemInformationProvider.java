@@ -34,6 +34,7 @@ import client.inventory.Item;
 import client.inventory.WeaponType;
 import config.YamlConfig;
 import constants.id.ItemId;
+import coop.stack.StackOverrides;
 import constants.inventory.EquipSlot;
 import constants.inventory.ItemConstants;
 import constants.skills.Assassin;
@@ -62,6 +63,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -362,6 +364,11 @@ public class ItemInformationProvider {
     }
 
     public short getSlotMax(Client c, int itemId) {
+        // coop 0.1: DB stack-size override takes precedence over WZ slotMax
+        Short override = StackOverrides.getInstance().maxPerSlot(itemId).orElse(null);
+        if (override != null) {
+            return (short) (override + getExtraSlotMaxFromPlayer(c, itemId));
+        }
         Short slotMax = slotMaxCache.get(itemId);
         if (slotMax != null) {
             return (short) (slotMax + getExtraSlotMaxFromPlayer(c, itemId));

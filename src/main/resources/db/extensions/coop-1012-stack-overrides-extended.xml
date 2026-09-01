@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1: extend the lv 1-30 starter toolkit so common ammo, scrolls and
+        upgrade ores stop clogging inventory slots. Potion/elixir rows continue to live
+        in coop-1011. All entries stay below 500 to keep client quantity widgets
+        legible; raise only after playtest confirms trunk UI behaviour.
+    -->
+    <changeSet id="coop-1012" author="coop">
+        <comment>Co-op Remix 0.1: stack overrides for arrows/bullets/stars, summon rocks, monster drops, scrolls and ores. Pure data; never edit previous changesets.</comment>
+        <sql>INSERT INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2060000, 1000), -- Arrows for Bow
+               (2061000, 1000), -- Bullets for Crossbow
+               (2070000, 1000), -- Stars for Throwing-Stars
+               (2070001, 1000),
+               (2070002, 1000),
+               (2070003, 1000),
+               (2070004, 1000),
+               (2070005, 1000),
+               (2070006, 1000),
+               (2070007, 1000),
+               (2070008, 1000),
+               (2070009, 1000),
+               (2070010, 1000),
+               (2070011, 1000),
+               (2070012, 1000),
+               (2070013, 1000),
+               (2100000, 100), -- Summoning Rocks (beginner set)
+               (2100001, 100), -- Summoning Rocks (intermediate set)
+               (2100002, 100), -- Summoning Rocks (advanced set)
+               (4000000, 100), -- Monster drops: transformation scrolls (stat 1)
+               (4000001, 100),
+               (4000002, 100),
+               (4000003, 100),
+               (4001000, 100), -- White scroll for armor
+               (4001001, 100), -- White scroll for weapon
+               (4001002, 100), -- White scroll for accessory
+               (4001010, 100), -- Black scroll for armor
+               (4001011, 100),
+               (4001012, 100),
+               (4010000, 500), -- Basic ores used in upgrade synthesis
+               (4010001, 500),
+               (4010002, 500),
+               (4010003, 500),
+               (4010004, 500),
+               (4010005, 500),
+               (4010006, 500),
+               (4010007, 500);</sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -205,6 +205,9 @@ public final class CashOperationHandler extends AbstractPacketHandler {
                         }
                         int qty = 4;
                         if (!chr.getStorage().canGainSlots(qty)) {
+                            // coop 0.1: explain the configurable cap instead of silently bouncing
+                            chr.dropMessage(1, "Storage at cap (" + YamlConfig.config.coop.storage_slot_cap
+                                    + "); raise coop.storage_slot_cap to raise the limit.");
                             c.enableCSActions();
                             return;
                         }
@@ -227,6 +230,9 @@ public final class CashOperationHandler extends AbstractPacketHandler {
                         }
                         int qty = 8;
                         if (!chr.getStorage().canGainSlots(qty)) {
+                            // coop 0.1: explain the configurable cap instead of silently bouncing
+                            chr.dropMessage(1, "Storage at cap (" + YamlConfig.config.coop.storage_slot_cap
+                                    + "); raise coop.storage_slot_cap to raise the limit.");
                             c.enableCSActions();
                             return;
                         }
@@ -251,7 +257,8 @@ public final class CashOperationHandler extends AbstractPacketHandler {
                         return;
                     }
                     if (!c.canGainCharacterSlot()) {
-                        chr.dropMessage(1, "You have already used up all 12 extra character slots.");
+                        // coop 0.1: slot cap is configurable, so the message must not hardcode a count
+                        chr.dropMessage(1, "You already have the maximum number of character slots.");
                         c.enableCSActions();
                         return;
                     }

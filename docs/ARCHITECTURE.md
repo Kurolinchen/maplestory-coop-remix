@@ -48,8 +48,12 @@ Liquibase under `src/main/resources/db`.
 - No transaction manager: manual JDBC transactions (e.g. `Character.saveCharToDB`,
   `Server.java:1617-1690`). DAO example: `database/note/NoteDao.java`.
 - Key tables: `accounts` (`db/tables/001-account.sql`, incl. `nxCredit`, `maplePoint`,
-  `nxPrepaid`, `characterslots DEFAULT 3`), `characters`, `inventoryitems`/`inventoryequipment`
+  `nxPrepaid`, `characterslots DEFAULT 3` — bumped to 15 by `db/extensions/coop-1001`),
+  `characters`, `inventoryitems`/`inventoryequipment`
   (003), quest tables (006), `drop_data`/`drop_data_global` (009), bosslogs (023).
+- Custom (coop) schema/data lives in `db/extensions/coop-*` (auto-included, see above):
+  slot-default bumps `coop-1001..1003`, stack-override table+seed `coop-1010..1011`
+  (`coop_stack_overrides` consulted by `ItemInformationProvider.getSlotMax`).
 
 ## 4. WZ data loading
 
@@ -72,8 +76,11 @@ Liquibase under `src/main/resources/db`.
   `PlayerLoggedinHandler.java:161-174`.
 - Save: `Character.saveCharToDB` (`Character.java:8244-8645`) — ONE manual transaction
   covering stats, skills, quests, cash shop, storage; autosave routes through `USE_AUTOSAVE`.
-- Character slots: DB `accounts.characterslots` (default 3); `Client.java:1361-1399`; buying
-  slots via cash shop action 0x08 capped at 15 (`net/server/channel/handlers/CashOperationHandler.java:244-266`).
+- Character slots: DB `accounts.characterslots` (upstream default 3, raised to 15 by
+  `db/extensions/coop-1001`); `Client.java:1361-1399` (+`setCharacterSlotsPersistent`, coop 0.1);
+  buying slots via cash shop action 0x08 capped at `coop.max_character_slots`
+  (`net/server/channel/handlers/CashOperationHandler.java:244-266`). AUTOMATIC_REGISTER writes
+  `coop.default_character_slots` (`net/server/handlers/login/LoginPasswordHandler.java:80-99`).
   `COLLECTIVE_CHARSLOT` toggles account-wide vs per-world counting
   (`config/ServerConfig.java:36`, `CharacterFactory.java:42`, `tools/PacketCreator.java:914`).
 
@@ -85,7 +92,8 @@ Liquibase under `src/main/resources/db`.
 - Server-side ops + packets: `client/inventory/manipulator/InventoryManipulator.java`
   (addFromDrop 173, move 486, equip 523, unequip 646, drop 705). Client packet entry
   `net/server/channel/handlers/ItemMoveHandler.java:36`.
-- Storage: `server/Storage.java` (create :72, load :83, slot cap 48 :112, save :132),
+- Storage: `server/Storage.java` (create :72 — initial slots from `coop.default_storage_slots`,
+  load :83, cap `coop.storage_slot_cap` :112, save :132),
   `server/StorageInventory.java:33-92`, world registry `net/server/world/World.java:505-532`,
   player ops `client/processor/npc/StorageProcessor.java:49-245`.
 - Equip stats applied: `Character.recalcEquipStats` (7600), `reapplyLocalStats` (7640),
@@ -229,7 +237,12 @@ Where our systems will hook in (planned; keep the footprint minimal):
 - **Account Legacy**: `accounts`-adjacent tables (`db/extensions/`), rate hooks in
   `Character.setPlayerRates`/`getExpRate` style getters (Character.java:4933+).
 - **Achievements/Mastery**: event listeners around kill/boss/quest/level-up sites listed above.
-- **QoL slots/storage**: `accounts.characterslots`, `Storage.canGainSlots`, config flags.
+- **QoL slots/storage (implemented 0.1)**: custom `coop:` config block (`coop/config/`,
+  one-line hook in `config/YamlConfig.java`), slot defaults/caps in `Client`, `Character`,
+  `Storage`, stack overrides in `coop/stack/` (+`ItemInformationProvider.getSlotMax`),
+  solo-expedition sizing in `coop/expedition/` (+`ExpeditionType.getMinSize`), skill reset in
+  `coop/reset/` (+`gm2/ResetSkillCommand`), GM cmds `!charslots`/`!storageslots` (gm4).
+  Full touchpoint list: `docs/features/0.1-coop-qol.md`.
 
 ## Upstream quirks (do not "fix" silently)
 

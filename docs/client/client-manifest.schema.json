@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maplestory-coop-remix.local/client-manifest.schema.json",
+  "title": "MapleStory Co-op Remix prepared client manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_schema_version",
+    "client_package_version",
+    "compatible_server",
+    "cosmic_upstream_client_commit",
+    "endpoint_profile",
+    "wz_hashes",
+    "files"
+  ],
+  "properties": {
+    "manifest_schema_version": { "const": 1 },
+    "client_package_version": { "type": "string", "minLength": 1 },
+    "compatible_server": { "type": "string", "minLength": 1 },
+    "cosmic_upstream_client_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "endpoint_profile": { "enum": ["local-dev", "vps-dev", "vps-prod"] },
+    "wz_hashes": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "size", "sha256"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

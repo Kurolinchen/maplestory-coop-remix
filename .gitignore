@@ -3,6 +3,8 @@
 !.idea/codeStyles/
 *.iml
 /target
+__pycache__/
+*.py[cod]
 
 # build files
 /build/
@@ -30,3 +32,10 @@ database/docker-pg-db-data
 ops/.env
 ops/config/
 ops/backups/
+
+# Agent session transcripts (must never be committed; may contain secrets)
+session-*.md
+
+# Local client workspace: binaries, Nexon assets, WZ client files, builds, archives, logs.
+# Only manifests/tooling/docs in the repo (see docs/CLIENT.md); never client binaries.
+.local/

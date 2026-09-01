@@ -13,6 +13,8 @@ Everything is wrapped by `ops/` scripts (see `AGENTS.md`). Layout:
   gitignored, chmod 600. Never read it back in chat output.
 - `ops/config/` — rendered config (gitignored)
 - `ops/backups/` — DB dumps from `ops/backup-dev-db.sh` (gitignored)
+- `.local/` — proprietary client sources, prepared builds, true-win32 prefixes, runner
+  archives and logs (gitignored; only hash manifests under `docs/client/` are tracked)
 
 Server ports (for the v83 client on this machine): login **8484**, world 1 channels 1-3
 **7575-7577**.
@@ -23,11 +25,19 @@ Server ports (for the v83 client on this machine): login **8484**, world 1 chann
 ops/build.sh          # compile + tests (≈1 min, Java 21 via SDKMAN)
 ops/start.sh          # create .env/config if missing, docker compose up -d
 ops/stop.sh           # docker compose down (volume kept)
+ops/stop-server.sh    # stop only gameserver; keep DB up for guarded maintenance
 ops/logs.sh server    # follow server logs (also: db)
 ops/status.sh         # containers, volume, backups, git branch
 ops/smoke-test.sh     # start → wait "Cosmic is now online" → check port 8484 → stop
 ops/test.sh           # unit tests only
+ops/client-status.sh  # verify client hashes/runtime and report server/client status
+ops/client-run-local.sh # mandatory hash verification, then launch local client
 ```
+
+Client profiles use `.local/client-builds/<profile>/MapleStory`. Build or verify them with
+`tools/client/build-client-profile.sh local-dev|vps-dev|vps-prod`; unconfigured remote IPs
+fail without producing output. Recreate the Soda runner and win32 prefix using
+`docs/CLIENT.md`.
 
 ### Dev DB lifecycle
 
@@ -36,9 +46,40 @@ ops/backup-dev-db.sh            # dump to ops/backups/cosmic-dev-<timestamp>.sql
 ops/restore-dev-db.sh [file]    # restore latest or given dump (confirmation)
 ops/reset-dev-db.sh             # DESTRUCTIVE: recreate DB volume (double confirmation);
                                 # Liquibase rebuilds schema + seed data on next boot
+ops/rotate-dev-db-pass.sh       # rotate the dev DB root password (see below)
 ```
 
 The dev DB is persistent across restarts (named volume) and resettable at any time.
+
+For local playtest GM access, stop only the `maplestory` service while leaving `db` running,
+then use `ops/set-dev-gm.sh <character-name>` and restart with `ops/start.sh`. The helper
+refuses any other Compose project, service, data volume, online account or running
+gameserver. It is a local operational data change, not a migration.
+
+### Secret rotation (dev DB password)
+
+The only dev secret is the MySQL root password, generated into gitignored `ops/.env`
+(chmod 600). Rotate it whenever it may have been exposed (e.g. leaked into a terminal
+log or shell trace):
+
+```
+ops/rotate-dev-db-pass.sh
+```
+
+The script generates a fresh password (`openssl rand`), applies it to all MySQL `root`
+accounts of the running dev volume (`ALTER USER`), verifies the new credential, then
+updates `ops/.env` (chmod 600) and re-renders `ops/config/config.dev.yaml`. If the
+server container is running it is restarted and the boot is verified. The script never
+prints the password, refuses to run under shell tracing (`set -x`), and aborts without
+side effects if any step fails. Afterwards run `ops/smoke-test.sh` as final proof.
+
+Hygiene rules:
+
+- Never read `ops/.env` back into chat/logs; never trace (`bash -x`) commands that load it.
+- `ops/.env`, `ops/config/`, `ops/backups/` are gitignored — verify with `git check-ignore`
+  when in doubt; only `ops/.env.example` (placeholder values) is tracked.
+- Production has no config here yet (templates only); rotation touches the local
+  `maple-coop-dev` compose project exclusively.
 
 ## Upstream sync
 

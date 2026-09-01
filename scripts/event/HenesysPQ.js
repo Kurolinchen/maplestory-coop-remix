@@ -55,6 +55,10 @@ function setEventRequirements() {
     } else {
         reqStr += minPlayers;
     }
+    // coop 0.1: when the server-side USE_ENABLE_SOLO_EXPEDITIONS flag is enabled, the
+    // EventManager lowers minPlayers to 1 at register time. Surface that contract here so
+    // the visible party size matches the actual lobby behaviour.
+    reqStr += "\r\n    (Solo OK on Co-op Remix)";
 
     reqStr += "\r\n    Level range: ";
     if (maxLevel - minLevel >= 1) {

@@ -24,6 +24,7 @@ package net.server.handlers.login;
 import client.Client;
 import client.DefaultDates;
 import config.YamlConfig;
+import coop.config.CoopDefaults;
 import net.PacketHandler;
 import net.packet.InPacket;
 import net.server.Server;
@@ -78,12 +79,15 @@ public final class LoginPasswordHandler implements PacketHandler {
 
 
         if (YamlConfig.config.server.AUTOMATIC_REGISTER && loginok == 5) {
+            // coop 0.1: characterslots set from coop.default_character_slots (falls back to the
+            // DB column default of coop-1001 when the config key is absent)
             try (Connection con = DatabaseConnection.getConnection();
-                 PreparedStatement ps = con.prepareStatement("INSERT INTO accounts (name, password, birthday, tempban) VALUES (?, ?, ?, ?);", Statement.RETURN_GENERATED_KEYS)) { //Jayd: Added birthday, tempban
+                 PreparedStatement ps = con.prepareStatement("INSERT INTO accounts (name, password, birthday, tempban, characterslots) VALUES (?, ?, ?, ?, ?);", Statement.RETURN_GENERATED_KEYS)) { //Jayd: Added birthday, tempban
                 ps.setString(1, login);
                 ps.setString(2, YamlConfig.config.server.BCRYPT_MIGRATION ? BCrypt.hashpw(pwd, BCrypt.gensalt(12)) : hashpwSHA512(pwd));
                 ps.setDate(3, Date.valueOf(DefaultDates.getBirthday()));
                 ps.setTimestamp(4, Timestamp.valueOf(DefaultDates.getTempban()));
+                ps.setInt(5, CoopDefaults.defaultCharacterSlots());
                 ps.executeUpdate();
 
                 try (ResultSet rs = ps.getGeneratedKeys()) {

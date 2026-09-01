@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1: lightweight Milestone-0.1 onboarding hints shown as a yellow
+        chat line when a character crosses the listed level. Read by
+        coop/onboarding/MilestoneHints.java on level-up. Pure data; designers can
+        adjust messages or add rows without touching Java. Hint key is unique so
+        re-sending the same hint after a re-login is suppressed.
+    -->
+    <changeSet id="coop-1020" author="coop">
+        <comment>Co-op Remix 0.1: milestone onboarding hints shown on level up.</comment>
+        <sql>CREATE TABLE coop_milestone_hints (
+                 id            VARCHAR(40) NOT NULL,
+                 min_level     SMALLINT    NOT NULL,
+                 hint_text     VARCHAR(255) NOT NULL,
+                 PRIMARY KEY (id)
+             );</sql>
+        <sql>INSERT INTO coop_milestone_hints (id, min_level, hint_text) VALUES
+               ('first-job-adventurer', 10, 'Tip: visit Dances with Balrog in Henesys to start your first job advancement.'),
+               ('storage-available',    15, 'Tip: storage is now usable. Find a Storage NPC in any town (lv 15+).'),
+               ('second-job',           30, 'Tip: you are ready for your second job advancement — talk to your job instructor in Sleepywood.');</sql>
+    </changeSet>
+
+</databaseChangeLog>

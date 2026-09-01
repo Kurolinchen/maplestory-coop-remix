@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1010" author="coop">
+        <comment>Co-op Remix 0.1: server-side stack size overrides, consulted before WZ slotMax (see coop/stack/StackOverrides.java).</comment>
+        <sql>CREATE TABLE coop_stack_overrides (
+                 item_id INT NOT NULL,
+                 max_per_slot SMALLINT NOT NULL,
+                 PRIMARY KEY (item_id)
+             );</sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1011" author="coop">
+        <comment>Co-op Remix 0.1: seed stack overrides (pure data change; extend via new changesets, never edit this one). Potions/elixirs stack to 300.</comment>
+        <sql>INSERT INTO coop_stack_overrides (item_id, max_per_slot) VALUES
+               (2000000, 300),
+               (2000001, 300),
+               (2000002, 300),
+               (2000003, 300),
+               (2000004, 300),
+               (2000005, 300),
+               (2000006, 300);</sql>
+    </changeSet>
+
+</databaseChangeLog>

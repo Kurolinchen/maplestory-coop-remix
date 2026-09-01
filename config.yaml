@@ -256,7 +256,7 @@ server:
     USE_BUFF_MOST_SIGNIFICANT: true     #When applying buffs, the player will stick with the highest stat boost among the listed, rather than overwriting stats.
     USE_BUFF_EVERLASTING: false         #Every applied buff on players holds expiration time so high it'd be considered permanent. Suggestion thanks to Vcoc.
     USE_MULTIPLE_SAME_EQUIP_DROP: true  #Enables multiple drops by mobs of the same equipment, number of possible drops based on the quantities provided at the drop data.
-    USE_ENABLE_FULL_RESPAWN: false       #At respawn task, always respawn missing mobs when they're available. Spawn count doesn't depend on how many players are currently there.
+    USE_ENABLE_FULL_RESPAWN: true        #coop 0.1: keep maps full when solo testing. Maps continue respawning mobs instead of tapering off, which keeps the early-game (lv 1-30) pacing healthy for a single tester.
     USE_ENABLE_CHAT_LOG: false          #Write in-game chat to log
     USE_MAP_OWNERSHIP_SYSTEM: false      #Flag to enable/disable map ownership system
     USE_FISHING_SYSTEM: false            #Flag to enable/disable custom fishing system
@@ -264,7 +264,7 @@ server:
 
     #Events/PQs Configuration
     USE_OLD_GMS_STYLED_PQ_NPCS: true     #Enables PQ NPCs with similar behaviour to old GMS style, that skips info about the PQs and immediately tries to register the party in.
-    USE_ENABLE_SOLO_EXPEDITIONS: false    #Enables start expeditions with any number of players. This will also bypass all the Zakum prequest.
+    USE_ENABLE_SOLO_EXPEDITIONS: true     #coop 0.1: solo-first co-op (DECISIONS D8). Enables start expeditions with any number of players. This will also bypass all the Zakum prequest.
     USE_ENABLE_DAILY_EXPEDITIONS: false  #Enables daily entry limitations in expeditions.
     USE_ENABLE_RECALL_EVENT: false        #Enables a disconnected player to reaccess the last event instance they were in before logging out. Recall only works if the event isn't cleared or disposed yet. Suggestion thanks to Alisson (Goukken).
 
@@ -330,7 +330,7 @@ server:
     MOB_STATUS_MONITOR_LIFE: 84         #Idle proc count the mob disease monitor is allowed to be there before closing it due to inactivity.
     MOB_STATUS_AGGRO_PERSISTENCE: 2     #Idle proc count on aggro update for a mob to keep following the current controller, given him/her is the leading damage dealer.
     MOB_STATUS_AGGRO_INTERVAL: 5000     #Interval in milliseconds between aggro logistics update.
-    USE_AUTOAGGRO_NEARBY: false         #Mobs start following the player when approached.
+    USE_AUTOAGGRO_NEARBY: true          #coop 0.1: mobs engage the closest player on sight; reduces manual kiting for solo testers.
 
     #Some Gameplay Enhancing Configurations
     #Scroll Configuration
@@ -453,3 +453,18 @@ server:
     NPCS_SCRIPTABLE:
       #9200000: Talk to Cody # Cody
       9001105: Rescue Gaga!  # Grandpa moon bunny
+
+#Co-op Remix custom configuration (Milestone 0.1, DECISIONS.md D7).
+#Server-wide alt-friendly / QoL defaults. All numbers here are data, never hardcoded.
+coop:
+    default_character_slots: 15       #Character slots a fresh account starts with (AUTOMATIC_REGISTER; accounts created elsewhere get the DB column default, see db/extensions/coop-1001).
+    max_character_slots: 15           #Cap for purchases/GM. Raise only after playtesting the v83 char-select UI.
+    default_inventory_slots: 32       #Slots per EQUIP/USE/SETUP/ETC tab for new characters.
+    default_storage_slots: 16         #Slots in a newly created account storage.
+    storage_slot_cap: 96              #Max account storage slots (purchases/GM). Playtest trunk grid before >48.
+    travel_rate_default: 10           #Default world travel-rate override (higher = faster transports). Used when a world's own travel_rate is unset. Kept here so Co-op balance lives in the coop: block (DECISIONS.md D7).
+    buddy_default_capacity: 50        #Initial buddy-list size for new characters; existing accounts keep their stored value until changed.
+    #Optional per-expedition-type minimum party size override (else solo flag decides).
+    #expedition_min_size:
+    #    ZAKUM: 1
+    #    HORNTAIL: 1
