@@ -13,6 +13,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -21,14 +25,14 @@ import java.util.TreeMap;
  * table {@code coop_milestone_hints} (db/extensions/coop-1020) so designers can tune
  * messages and thresholds without touching Java.
  *
- * <p>Lookup is by minimum level. Once a hint's id has been delivered it is the
- * caller's responsibility to persist it on the character to suppress re-sending
- * (mirrors the pattern already used for the existing starter-party hint).
+ * <p>Multiple rows with the same {@code min_level} are supported (each becomes its
+ * own entry in the returned list). Hint deduplication per character lives in
+ * {@link CharacterHintState}, not in this loader.
  */
 public class MilestoneHints {
     private static final Logger log = LoggerFactory.getLogger(MilestoneHints.class);
 
-    private static volatile NavigableMap<Integer, HintEntry> hints;
+    private static volatile NavigableMap<Integer, List<HintEntry>> hints;
 
     private MilestoneHints() {
     }
@@ -36,8 +40,8 @@ public class MilestoneHints {
     public record HintEntry(String id, int minLevel, String text) {
     }
 
-    public static NavigableMap<Integer, HintEntry> all() {
-        NavigableMap<Integer, HintEntry> local = hints;
+    public static NavigableMap<Integer, List<HintEntry>> all() {
+        NavigableMap<Integer, List<HintEntry>> local = hints;
         if (local == null) {
             synchronized (MilestoneHints.class) {
                 local = hints;
@@ -54,14 +58,20 @@ public class MilestoneHints {
     }
 
     /**
-     * Returns every hint at or below the given level, useful for "show everything that has unlocked so far".
+     * Returns every hint at or below the given level. The list is ordered by
+     * (minLevel, id) so callers can present or persist them deterministically.
      */
-    public static java.util.List<HintEntry> forLevel(int level) {
-        return all().headMap(level, true).values().stream().toList();
+    public static List<HintEntry> forLevel(int level) {
+        List<HintEntry> all = new ArrayList<>();
+        for (List<HintEntry> bucket : all().headMap(level, true).values()) {
+            all.addAll(bucket);
+        }
+        all.sort(Comparator.comparingInt(HintEntry::minLevel).thenComparing(HintEntry::id));
+        return Collections.unmodifiableList(all);
     }
 
-    private static NavigableMap<Integer, HintEntry> loadFromDb() {
-        NavigableMap<Integer, HintEntry> loaded = new TreeMap<>();
+    private static NavigableMap<Integer, List<HintEntry>> loadFromDb() {
+        NavigableMap<Integer, List<HintEntry>> loaded = new TreeMap<>();
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement ps = con.prepareStatement(
                      "SELECT id, min_level, hint_text FROM coop_milestone_hints")) {
@@ -75,15 +85,16 @@ public class MilestoneHints {
                                 id, minLevel);
                         continue;
                     }
-                    loaded.merge(minLevel, new HintEntry(id, minLevel, text),
-                            (a, b) -> b /* keep last on duplicate min_level */);
+                    loaded.computeIfAbsent(minLevel, k -> new ArrayList<>())
+                            .add(new HintEntry(id, minLevel, text));
                 }
             }
         } catch (SQLException e) {
             log.error("Failed to load coop_milestone_hints; hint table is unavailable", e);
             return null;
         }
-        log.info("Loaded {} coop milestone hint(s)", loaded.size());
+        int count = loaded.values().stream().mapToInt(List::size).sum();
+        log.info("Loaded {} coop milestone hint(s) across {} level bucket(s)", count, loaded.size());
         return loaded;
     }
 }

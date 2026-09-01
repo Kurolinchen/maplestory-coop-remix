@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Co-op Remix 0.1b (Slice A.1, audit fix B1):
+        Move per-character "hint already seen" markers out of characters.dataString
+        (VARCHAR(64)) into their own table so we cannot overflow the column on
+        cumulative level-up hints and roll back the entire character save.
+
+        PK is (character_id, hint_id); both are FK-ed to the upstream tables with
+        ON DELETE CASCADE so character/account cleanup stays consistent.
+    -->
+    <changeSet id="coop-1030" author="coop">
+        <comment>Co-op Remix 0.1b: persist per-character hint-seen markers in a dedicated table.</comment>
+
+        <createTable tableName="coop_character_hint_seen">
+            <column name="character_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="hint_id" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="seen_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="coop_character_hint_seen"
+                       columnNames="character_id, hint_id"
+                       constraintName="pk_coop_character_hint_seen"/>
+
+        <addForeignKeyConstraint baseTableName="coop_character_hint_seen"
+                                 baseColumnNames="character_id"
+                                 referencedTableName="characters"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_coop_hint_seen_character"
+                                 onDelete="CASCADE"/>
+
+        <sql>CREATE INDEX ix_coop_hint_seen_character ON coop_character_hint_seen (character_id);</sql>
+    </changeSet>
+</databaseChangeLog>

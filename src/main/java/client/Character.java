@@ -172,6 +172,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -6462,7 +6463,7 @@ public class Character extends AbstractCharacterObject {
             if (InventoryManipulator.checkSpace(client, ItemId.PERFECT_PITCH, (short) 1, "")) {
                 InventoryManipulator.addById(client, ItemId.PERFECT_PITCH, (short) 1, "", -1);
             }
-        } else if (level >= 10 && !sawMilestoneHint("starter-party-leave")) {
+        } else if (level >= 10 && !hasSeenMilestoneHint("starter-party-leave")) {
             // coop 0.1: catch up the trigger for players who joined already above lv9; the
             // dataString guard ensures the hint fires exactly once per character.
             Runnable r = new Runnable() {
@@ -6471,7 +6472,7 @@ public class Character extends AbstractCharacterObject {
                     if (leaveParty()) {
                         showHint("You have reached #blevel 10#k, therefore you must leave your #rstarter party#k.");
                     }
-                    setMilestoneHintSeen("starter-party-leave");
+                    markMilestoneHintSeen("starter-party-leave");
                 }
             };
 
@@ -6483,11 +6484,11 @@ public class Character extends AbstractCharacterObject {
             if (hint.minLevel() < level) {
                 continue; // only trigger when the level *crosses* the threshold
             }
-            if (sawMilestoneHint(hint.id())) {
+            if (hasSeenMilestoneHint(hint.id())) {
                 continue;
             }
             showHint(hint.text());
-            setMilestoneHintSeen(hint.id());
+            markMilestoneHintSeen(hint.id());
         }
 
         guildUpdate();
@@ -7021,6 +7022,10 @@ public class Character extends AbstractCharacterObject {
                         }
                     }
                     ret.commitExcludedItems();
+
+                    // coop 0.1b (Slice A.1): preload the hint-seen cache so the
+                    // first level-up after login does not re-fire any hints.
+                    ret.ensureSeenMilestoneHintsLoaded();
 
 
                     if (channelserver) {
@@ -8644,6 +8649,10 @@ public class Character extends AbstractCharacterObject {
                     cashshop.save(con);
                 }
 
+                // coop 0.1b (Slice A.1): persist milestone hint-seen markers; flush
+                // before storage so any failure rolls back the whole character save.
+                flushMilestoneHintSaves(con);
+
                 if (storage != null && usedStorage) {
                     storage.saveToDB(con);
                     usedStorage = false;
@@ -10245,23 +10254,61 @@ public class Character extends AbstractCharacterObject {
         }
     }
 
-    // coop 0.1: persisted record of onboarding hints the character has already seen.
-    // The marker is suffixed to dataString, sharing the same character column.
-    private static final String HINT_MARKER_PREFIX = "MSH:";
+    // coop 0.1b (Slice A.1): per-character hint-seen markers live in the dedicated
+    // coop_character_hint_seen table (db/extensions/coop-1030). Cached per-character
+    // for the lifetime of the session; persisted through Character.saveCharToDB via
+    // flushMilestoneHintSaves(). Replaces the previous dataString concatenation that
+    // could overflow VARCHAR(64) and roll back the entire character save (audit B1).
+    private Set<String> seenMilestoneHints = null;
+    private final List<String> pendingMilestoneHintSaves = new ArrayList<>();
 
-    public boolean sawMilestoneHint(String hintId) {
-        if (hintId == null || hintId.isBlank() || dataString == null) {
-            return false;
+    private Set<String> ensureSeenMilestoneHintsLoaded() {
+        if (seenMilestoneHints == null) {
+            seenMilestoneHints = new HashSet<>(coop.onboarding.CharacterHintState.loadSeen(id));
         }
-        return dataString.contains(HINT_MARKER_PREFIX + hintId);
+        return seenMilestoneHints;
     }
 
-    public void setMilestoneHintSeen(String hintId) {
-        if (hintId == null || hintId.isBlank() || sawMilestoneHint(hintId)) {
+    public boolean hasSeenMilestoneHint(String hintId) {
+        if (hintId == null || hintId.isBlank()) {
+            return false;
+        }
+        return ensureSeenMilestoneHintsLoaded().contains(hintId);
+    }
+
+    public void markMilestoneHintSeen(String hintId) {
+        if (hintId == null || hintId.isBlank()) {
             return;
         }
-        String marker = HINT_MARKER_PREFIX + hintId;
-        this.dataString = (dataString == null ? "" : dataString) + marker;
+        if (ensureSeenMilestoneHintsLoaded().add(hintId)) {
+            synchronized (pendingMilestoneHintSaves) {
+                pendingMilestoneHintSaves.add(hintId);
+            }
+        }
+    }
+
+    /**
+     * Persists all hint-seen markers accumulated since the last save. MUST be called
+     * inside an open JDBC transaction (saveCharToDB provides one). Failures bubble
+     * up so the outer save rolls back, preserving the audit B1 guarantee.
+     */
+    public void flushMilestoneHintSaves(java.sql.Connection con) throws java.sql.SQLException {
+        List<String> pending;
+        synchronized (pendingMilestoneHintSaves) {
+            if (pendingMilestoneHintSaves.isEmpty()) {
+                return;
+            }
+            pending = new ArrayList<>(pendingMilestoneHintSaves);
+            pendingMilestoneHintSaves.clear();
+        }
+        if (!coop.onboarding.CharacterHintState.persistSeen(con, id, pending)) {
+            // rollback the in-memory mirror so we re-attempt on the next save
+            synchronized (pendingMilestoneHintSaves) {
+                pendingMilestoneHintSaves.addAll(0, pending);
+            }
+            throw new java.sql.SQLException(
+                    "coop_character_hint_seen: failed to persist " + pending.size() + " hint(s) for character " + id);
+        }
     }
 
     public void createDragon() {
