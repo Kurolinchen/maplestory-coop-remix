@@ -24,7 +24,13 @@
  */
 
 var isPq = true;
-var minPlayers = 3, maxPlayers = 6;
+
+// coop 0.1b (Slice A.4, audit fixes B3/B4): solo-first co-op lowers the HPQ
+// minimum so a single tester (with or without Companion Bots) can register and
+// clear the event. The original three-player minimum is preserved as the
+// mechanical recommendation (harder stages were balanced for three bodies)
+// and surfaced as text below.
+var minPlayers = 1, maxPlayers = 6;
 var minLevel = 10, maxLevel = 255;
 var entryMap = 910010000;
 var exitMap = 910010300;
@@ -55,10 +61,11 @@ function setEventRequirements() {
     } else {
         reqStr += minPlayers;
     }
-    // coop 0.1: when the server-side USE_ENABLE_SOLO_EXPEDITIONS flag is enabled, the
-    // EventManager lowers minPlayers to 1 at register time. Surface that contract here so
-    // the visible party size matches the actual lobby behaviour.
-    reqStr += "\r\n    (Solo OK on Co-op Remix)";
+    // coop 0.1b: solo entry is supported end-to-end. Bringing more party members
+    // (including Companion Bots) makes the Bunny-protect stages safer; the event
+    // remains solo-clearable because every objective can be completed by one body,
+    // just with more risk.
+    reqStr += "\r\n    (Solo OK on Co-op Remix; 3+ recommended for Bunny stages)";
 
     reqStr += "\r\n    Level range: ";
     if (maxLevel - minLevel >= 1) {

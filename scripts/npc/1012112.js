@@ -63,7 +63,10 @@ function action(mode, type, selection) {
             } else if (status == 1) {
                 if (selection == 0) {
                     if (cm.getParty() == null) {
-                        cm.sendOk("Hi there! I'm Tory. This place is covered with mysterious aura of the full moon, and no one person can enter here by him/herself.");
+                        // coop 0.1b (Slice A.4, audit B3/B4): HPQ accepts solo entries
+                        // (minPlayers lowered to 1). A solo player must still form a
+                        // 1-person party to take part in the event mechanics.
+                        cm.sendOk("Hi there! I'm Tory. Please form a party (even by yourself) and have the leader talk to me again to enter.");
                         cm.dispose();
                     } else if (!cm.isLeader()) {
                         cm.sendOk("If you'd like to enter here, the leader of your party will have to talk to me. Talk to your party leader about this.");
