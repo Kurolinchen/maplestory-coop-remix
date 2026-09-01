@@ -187,6 +187,16 @@ public final class CompanionLifecycleService {
     }
 
     private Result dismissLocked(CompanionSession session, Character bot) {
+        // An unresolvable companion must NOT be reported as a successful
+        // dismissal: nothing would be saved, the loaded Character would stay
+        // attached to its map and party, and the freed slot would let a later
+        // spawn load the SAME database row a second time (two savers for one
+        // row = lost or duplicated items/meso/EXP). Hold the session instead.
+        if (bot == null) {
+            session.compareAndSetState(CompanionSession.State.DISMISSING,
+                    CompanionSession.State.SAVE_FAILED);
+            return Result.fail("companion object is unreachable; state held for retry");
+        }
 
         CompanionClient client = bot != null && bot.getClient() instanceof CompanionClient cc
                 ? cc : null;

@@ -73,6 +73,12 @@ public final class CompanionController {
         if (!check.allowed()) {
             return Outcome.fail("Cannot bind: " + check.reason());
         }
+        // The tier check alone would admit Noblesse (1000) and GM (900), which
+        // have no combat profile at all. Require an actual combat profile.
+        if (CompanionCombatProfile.forJob(check.companionJob()) == null) {
+            return Outcome.fail("That character has no combat profile yet "
+                    + "(the first job advancement is required).");
+        }
         if (!isJobTierAllowed(check.companionJob())) {
             return Outcome.fail("Companion job is not supported yet (only first-job characters).");
         }
@@ -278,16 +284,24 @@ public final class CompanionController {
             return Outcome.fail("You have no active companion.");
         }
         CompanionSession session = live.get();
-        Character bot = findCompanionCharacter(session);
-        if (bot == null) {
-            return Outcome.fail("Companion is not reachable right now.");
+        // Take the session lock: the tick loop holds it while mutating the
+        // companion's inventories, and equipping from the command thread without
+        // it could interleave with a loot pickup or a save.
+        session.lock().lock();
+        try {
+            Character bot = findCompanionCharacter(session);
+            if (bot == null) {
+                return Outcome.fail("Companion is not reachable right now.");
+            }
+            CompanionEquipmentService.EquipResult result =
+                    equipment.equip(bot, sourceSlot, targetSlot);
+            if (!result.success()) {
+                return Outcome.fail(result.reason());
+            }
+            return Outcome.ok("Companion equipped slot " + sourceSlot + ".");
+        } finally {
+            session.lock().unlock();
         }
-        CompanionEquipmentService.EquipResult result =
-                equipment.equip(bot, sourceSlot, targetSlot);
-        if (!result.success()) {
-            return Outcome.fail(result.reason());
-        }
-        return Outcome.ok("Companion equipped slot " + sourceSlot + ".");
     }
 
     public String status(Character owner) {
@@ -421,20 +435,47 @@ public final class CompanionController {
     }
 
     /**
-     * Locates the live companion character object. The companion is not in
-     * PlayerStorage (by design), so we look it up through the owner's current
-     * map, which is the only place the bot is attached.
+     * Locates the live companion character object.
+     *
+     * <p>The companion is not in PlayerStorage (by design), so we look it up on
+     * the map it was attached to. We try the owner's current map first and then
+     * the map recorded on the bot itself, because the owner may have moved or be
+     * mid-transition while the bot is still attached elsewhere. Returning null
+     * here is NOT benign: dismissal must refuse rather than release the slot
+     * without saving.
      */
     private Character findCompanionCharacter(CompanionSession session) {
         Character owner = findOnlineOwner(session);
-        if (owner == null) {
-            return null;
+        if (owner != null && owner.getMap() != null) {
+            Character onOwnerMap = owner.getMap().getCharacterById(session.companionCharacterId());
+            if (onOwnerMap != null) {
+                return onOwnerMap;
+            }
         }
-        MapleMap map = owner.getMap();
-        if (map == null) {
-            return null;
+        // Fall back to scanning the world's channels for the map that still
+        // holds the companion.
+        try {
+            net.server.world.World world = net.server.Server.getInstance()
+                    .getWorld(session.world());
+            if (world == null) {
+                return null;
+            }
+            for (net.server.channel.Channel ch : world.getChannels()) {
+                for (Character chr : ch.getPlayerStorage().getAllCharacters()) {
+                    if (chr.getMap() == null) {
+                        continue;
+                    }
+                    Character found = chr.getMap().getCharacterById(session.companionCharacterId());
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("Companion lookup by map scan failed companion={}: {}",
+                    session.companionCharacterId(), e.getMessage());
         }
-        return map.getCharacterById(session.companionCharacterId());
+        return null;
     }
 
     private Character findOnlineOwner(CompanionSession session) {

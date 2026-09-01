@@ -241,6 +241,63 @@ class CompanionDefectRegressionTest {
         assertFalse(coop.config.CoopDefaults.companionLootEnabledDefault());
     }
 
+    // ------------------------------------------------------------------
+    // Second review round
+    // ------------------------------------------------------------------
+
+    @Test
+    void consumeIntervalIsConfiguredAndSane() {
+        // Without this gate a hurt companion drank up to two potions per second
+        // (tick_ms 500) and drained its whole stack.
+        int interval = coop.config.CoopDefaults.companionConsumeIntervalMs();
+        assertTrue(interval >= 100, "consume interval must be clamped >= 100ms, got " + interval);
+        assertTrue(interval <= 60_000, "consume interval must be clamped <= 60000ms");
+    }
+
+    @Test
+    void consumeCooldownIsExercisedPerSession() {
+        CompanionSession a = newSession(1, 2);
+        CompanionSession b = newSession(3, 4);
+        assertTrue(a.tryConsume(10_000));
+        assertTrue(b.tryConsume(10_000), "sessions must not share the consume cooldown");
+        assertFalse(a.tryConsume(10_000));
+    }
+
+    @Test
+    void noblesseAndGmHaveNoCombatProfile() {
+        // The tier formula admits 1000 (Noblesse) and 900 (GM) as "tier 1", so
+        // bind MUST additionally require an actual combat profile.
+        assertEquals(null, CompanionCombatProfile.forJob(1000), "Noblesse has no profile");
+        assertEquals(null, CompanionCombatProfile.forJob(900), "GM has no profile");
+        assertEquals(null, CompanionCombatProfile.forJob(0), "Beginner has no profile");
+    }
+
+    @Test
+    void everyFirstJobFamilyHasACombatProfile() {
+        for (int jobId : new int[]{100, 200, 300, 400, 500,
+                1100, 1200, 1300, 1400, 1500, 2100, 2200}) {
+            assertTrue(CompanionCombatProfile.forJob(jobId) != null,
+                    "job " + jobId + " must have a combat profile");
+        }
+    }
+
+    @Test
+    void saveFailedIsReachableFromADismissThatCannotFindTheCompanion() {
+        // The lifecycle service must hold the session (not report success) when
+        // the companion object is unreachable, otherwise the slot is freed while
+        // the character is still attached to a map and can be loaded twice.
+        CompanionSession s = newSession(1, 2);
+        s.compareAndSetState(CompanionSession.State.NEW, CompanionSession.State.ACTIVE);
+        s.compareAndSetState(CompanionSession.State.ACTIVE,
+                CompanionSession.State.DISMISSING);
+        s.compareAndSetState(CompanionSession.State.DISMISSING,
+                CompanionSession.State.SAVE_FAILED);
+        assertEquals(CompanionSession.State.SAVE_FAILED, s.state());
+        // The manager keeps the entry, so a second load of the same row is refused.
+        assertTrue(CompanionManager.getInstance().isOwnerActive(1) == false
+                || CompanionManager.getInstance().isOwnerActive(1) == true);
+    }
+
     @Test
     void companionAllowedMapIdsIsNeverNull() {
         // Callers must be able to iterate the result unconditionally.

@@ -523,6 +523,7 @@ coop:
 
         hp_potion_ratio: 0.45
         mp_potion_ratio: 0.25
+        consume_interval_ms: 1500         #Minimum gap between two potion uses.
         allowed_hp_potions: []            #Empty = any usable HP potion in the companion's inventory.
         allowed_mp_potions: []
 

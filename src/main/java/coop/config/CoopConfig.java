@@ -68,6 +68,9 @@ public class CoopConfig {
         // Consumables
         public double hp_potion_ratio = 0.45;
         public double mp_potion_ratio = 0.25;
+        /** Minimum gap between two potion uses; without it a hurt companion
+            drains its whole stack within a few ticks. */
+        public int consume_interval_ms = 1500;
         public List<Integer> allowed_hp_potions = new ArrayList<>();
         public List<Integer> allowed_mp_potions = new ArrayList<>();
         // Looting (Slice E)

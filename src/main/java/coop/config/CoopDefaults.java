@@ -267,6 +267,10 @@ public final class CoopDefaults {
         return clampRatio(companion().mp_potion_ratio);
     }
 
+    public static int companionConsumeIntervalMs() {
+        return clamp(companion().consume_interval_ms, 100, 60_000);
+    }
+
     public static List<Integer> companionAllowedHpPotions() {
         return positiveIds(companion().allowed_hp_potions);
     }

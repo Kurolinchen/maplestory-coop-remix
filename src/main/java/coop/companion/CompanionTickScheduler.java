@@ -148,8 +148,11 @@ public final class CompanionTickScheduler {
         }
 
         // Slice D: consumables first (a dead or dry bot is useless), then combat.
+        // The consume cooldown lives on the session, not on the shared service,
+        // so one companion's potion use never throttles another's.
         CompanionConsumableService.Need need = consumables.evaluate(bot);
-        if (need != CompanionConsumableService.Need.NONE) {
+        if (need != CompanionConsumableService.Need.NONE
+                && session.tryConsume(CoopDefaults.companionConsumeIntervalMs())) {
             consumables.consume(bot, need);
         }
         combat.applyIncomingDamage(session, bot);

@@ -78,8 +78,30 @@ public final class CompanionConsumableService {
         if (effect == null) {
             return ConsumeResult.skipped("potion " + itemId + " has no usable effect");
         }
+        // Restrict to plain recovery effects.
+        if (effect.getHp() <= 0 && effect.getMp() <= 0) {
+            return ConsumeResult.skipped(
+                    "item " + itemId + " is not a recovery item; refusing");
+        }
+        // Some consumables carry a `moveTo`, and honouring it would teleport the
+        // companion away from the owner (StatEffect.applyTo -> changeMap). The
+        // field is private with no getter, so we detect the effect after the
+        // fact and undo it rather than trying to predict it.
+        int mapBefore = bot.getMapId();
         if (!effect.applyTo(bot)) {
             return ConsumeResult.skipped("potion " + itemId + " effect was rejected");
+        }
+        if (bot.getMapId() != mapBefore) {
+            log.warn("Companion {} was moved by item {} ({} -> {}); undoing",
+                    bot.getId(), itemId, mapBefore, bot.getMapId());
+            try {
+                bot.changeMap(mapBefore);
+            } catch (RuntimeException e) {
+                log.error("Could not undo companion move after item {}; companion is on map {}",
+                        itemId, bot.getMapId(), e);
+            }
+            return ConsumeResult.skipped(
+                    "potion " + itemId + " tried to move the companion; effect reverted");
         }
 
         // Only now remove exactly one from the stack, through the standard
