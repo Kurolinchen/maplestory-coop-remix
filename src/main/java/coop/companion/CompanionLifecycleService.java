@@ -225,6 +225,44 @@ public final class CompanionLifecycleService {
     }
 
     /**
+     * Moves an already-attached companion from one map to another without
+     * running any portal script. Used by the portal-follow path (Slice C).
+     *
+     * <p>The transfer is a plain detach/attach pair: the party membership is
+     * untouched, so the companion stays in the owner's party across the hop.
+     */
+    public Result transferToMap(Character bot, MapleMap source, MapleMap destination) {
+        if (bot == null || source == null || destination == null) {
+            return Result.fail("transfer requires bot, source and destination");
+        }
+        if (source.getId() == destination.getId()) {
+            return Result.fail("source and destination are the same map");
+        }
+        try {
+            source.removePlayer(bot);
+        } catch (RuntimeException e) {
+            log.error("Companion transfer failed at source detach companion={}: {}",
+                    bot.getId(), e.getMessage());
+            return Result.fail("source detach failed: " + e.getMessage());
+        }
+        try {
+            destination.addPlayer(bot);
+        } catch (RuntimeException e) {
+            log.error("Companion transfer failed at destination attach companion={}: {}",
+                    bot.getId(), e.getMessage());
+            // Put the bot back where it was so we never lose it entirely.
+            try {
+                source.addPlayer(bot);
+            } catch (RuntimeException inner) {
+                log.error("Companion rollback to source map failed companion={}: {}",
+                        bot.getId(), inner.getMessage());
+            }
+            return Result.fail("destination attach failed: " + e.getMessage());
+        }
+        return Result.ok(bot);
+    }
+
+    /**
      * Persists the companion's binding mode so a later spawn resumes in the
      * same behaviour. Pure data update; callers should not depend on ordering.
      */

@@ -159,6 +159,8 @@ public final class CompanionController {
             manager.release(session);
             return Outcome.fail("Spawn failed: " + result.reason());
         }
+        // Slice C: start the shared follow/navigation tick loop (idempotent).
+        CompanionTickScheduler.getInstance().start();
         return Outcome.ok("Companion " + check.companionName() + " spawned.");
     }
 
