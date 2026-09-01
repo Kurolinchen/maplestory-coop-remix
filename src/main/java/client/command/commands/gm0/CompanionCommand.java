@@ -62,9 +62,16 @@ public class CompanionCommand extends Command {
             case "unbind" -> report(player, controller.unbind(player));
             case "spawn" -> report(player, controller.spawn(player));
             case "dismiss" -> report(player, controller.dismiss(player));
+            case "mode" -> {
+                if (params.length < 2) {
+                    player.yellowMessage("Syntax: @companion mode <passive|follow|grind|stay>");
+                    return;
+                }
+                report(player, controller.setMode(player, params[1]));
+            }
             case "status" -> player.yellowMessage(controller.status(player));
             default -> player.yellowMessage("Unknown subcommand: " + params[0]
-                    + ". Use bind|unbind|spawn|dismiss|status.");
+                    + ". Use bind|unbind|spawn|dismiss|mode|status.");
         }
     }
 

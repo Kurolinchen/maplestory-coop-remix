@@ -180,6 +180,39 @@ public final class CompanionController {
         return Outcome.ok("Companion dismissed.");
     }
 
+    /**
+     * Changes the companion's behaviour mode. GRIND is the only mode that
+     * attacks; PASSIVE/FOLLOW never initiate combat. The mode is persisted so a
+     * later spawn resumes the same behaviour.
+     */
+    public Outcome setMode(Character owner, String rawMode) {
+        CompanionSession.Mode mode =
+                CompanionSession.Mode.parse(rawMode, null);
+        if (mode == null) {
+            return Outcome.fail("Unknown mode '" + rawMode
+                    + "'. Use passive|follow|grind|support|stay.");
+        }
+        if (mode == CompanionSession.Mode.SUPPORT) {
+            return Outcome.fail("The support mode is not implemented yet (Slice D follow-up).");
+        }
+        Optional<CompanionSession> live = manager.findByOwner(owner.getId());
+        if (live.isPresent()) {
+            // Live session: the in-memory snapshot drives the tick loop, so we
+            // cannot mutate its final mode field. Report how to apply it.
+            return Outcome.fail("Companion is active. Use @companion dismiss, then set the mode, then spawn again.");
+        }
+        if (CompanionBindingRepository.findByOwner(owner.getId()).isEmpty()) {
+            return Outcome.fail("No companion bound. Use @companion bind <character-name> first.");
+        }
+        boolean ok = lifecycle.persistMode(owner.getId(), mode,
+                CoopDefaults.companionLootEnabledDefault());
+        if (!ok) {
+            return Outcome.fail("Could not persist mode; check server logs.");
+        }
+        return Outcome.ok("Companion mode set to " + mode.name()
+                + ". It will apply the next time you spawn the companion.");
+    }
+
     public String status(Character owner) {
         Optional<CompanionBindingRepository.Binding> binding =
                 CompanionBindingRepository.findByOwner(owner.getId());

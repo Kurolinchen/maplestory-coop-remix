@@ -41,6 +41,8 @@ public final class CompanionTickScheduler {
 
     private final CompanionManager manager = CompanionManager.getInstance();
     private final CompanionFollowController follow = new CompanionFollowController();
+    private final CompanionCombatController combat = new CompanionCombatController();
+    private final CompanionConsumableService consumables = new CompanionConsumableService();
 
     private volatile boolean running = false;
     private ScheduledFuture<?> task;
@@ -113,6 +115,19 @@ public final class CompanionTickScheduler {
             // discard the loaded character.
             return;
         }
+        // Slice D: a dead companion is dismissed instead of auto-respawning,
+        // which prevents repeated death loops while the owner is away.
+        if (!bot.isAlive()) {
+            if (CoopDefaults.companionDeathDismiss()) {
+                log.info("Companion died; dismissing owner={} companion={}",
+                        session.ownerCharacterId(), session.companionCharacterId());
+                manager.release(session);
+                trackers.remove(session.ownerCharacterId());
+                CompanionLifecycleService.getInstance().dismiss(session, bot);
+            }
+            return;
+        }
+
         CompanionFollowController.TickResult result = follow.tick(session, owner, bot, tracker);
         if (result.dismissed()) {
             log.info("Companion follow dismissing owner={} companion={}: {}",
@@ -122,6 +137,15 @@ public final class CompanionTickScheduler {
             CompanionLifecycleService.getInstance().dismiss(session, bot);
             return;
         }
+
+        // Slice D: consumables first (a dead or dry bot is useless), then combat.
+        CompanionConsumableService.Need need = consumables.evaluate(bot);
+        if (need != CompanionConsumableService.Need.NONE) {
+            consumables.consume(bot, need);
+        }
+        combat.applyIncomingDamage(session, bot);
+        combat.tick(session, bot);
+
         session.markTickCompleted();
     }
 
