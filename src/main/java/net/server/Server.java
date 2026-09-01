@@ -1927,6 +1927,12 @@ public class Server {
         if (getWorlds() == null) {
             return;//already shutdown
         }
+        // coop 0.1b (Slice B): Companion Bots are NOT in PlayerStorage, so the
+        // normal player-disconnect path would never reach them. Save and dismiss
+        // them here, BEFORE worlds/channels dispose their maps - otherwise the
+        // bot's map reference disappears before we can persist it.
+        coop.companion.CompanionController.getInstance().shutdownAll();
+
         for (World w : getWorlds()) {
             w.shutdown();
         }

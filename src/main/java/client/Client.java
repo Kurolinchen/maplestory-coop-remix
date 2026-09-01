@@ -988,6 +988,14 @@ public class Client extends ChannelInboundHandlerAdapter {
 
     private void disconnectInternal(boolean shutdown, boolean cashshop) {//once per Client instance
         if (player != null && player.isLoggedin() && player.getClient() != null) {
+            // coop 0.1b (Slice B): dismiss any Companion Bot owned by this
+            // character BEFORE the owner leaves its map / party. The companion
+            // must never survive its owner's session; a leftover bot would keep
+            // a stale reference to a character that is about to be saved.
+            if (coop.companion.CompanionManager.getInstance().isOwnerActive(player.getId())) {
+                coop.companion.CompanionController.getInstance().onOwnerDisconnect(player);
+            }
+
             final int messengerid = player.getMessenger() == null ? 0 : player.getMessenger().getId();
             //final int fid = player.getFamilyId();
             final BuddyList bl = player.getBuddylist();

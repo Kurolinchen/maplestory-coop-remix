@@ -26,6 +26,7 @@ package client.command;
 import client.Client;
 import client.command.commands.gm0.ChangeLanguageCommand;
 import client.command.commands.gm0.CharInfoCommand;
+import client.command.commands.gm0.CompanionCommand;
 import client.command.commands.gm0.DisposeCommand;
 import client.command.commands.gm0.DropLimitCommand;
 import client.command.commands.gm0.EnableAuthCommand;
@@ -355,6 +356,8 @@ public class CommandsExecutor {
         addCommand("equiplv", EquipLvCommand.class);
         addCommand("showrates", ShowRatesCommand.class);
         addCommand("charinfo", CharInfoCommand.class);
+        // coop 0.1b (Slice B): optional Companion Bot control, player-facing
+        addCommand("companion", CompanionCommand.class);
         addCommand("rates", RatesCommand.class);
         addCommand("online", OnlineCommand.class);
         addCommand("gm", GmCommand.class);

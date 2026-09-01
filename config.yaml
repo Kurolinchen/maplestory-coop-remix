@@ -468,3 +468,53 @@ coop:
     #expedition_min_size:
     #    ZAKUM: 1
     #    HORNTAIL: 1
+
+    #Companion Bots (coop 0.1b, experimental for the first gameplay test).
+    #Companions are OPTIONAL: they are normal alternate characters controlled
+    #server-side. Solo play remains fully supported and is never gated behind
+    #having a companion. Every key is clamped in CoopDefaults.
+    companion:
+        enabled: false                    #Master switch. Must be turned on explicitly for playtests.
+        max_active_per_owner: 1           #One companion per owner in the MVP.
+        max_active_per_account: 1         #One companion per account in the MVP.
+        allowed_map_ids: []               #Empty = no map eligible. Add explicit grind map ids to enable spawning.
+        allowed_job_tier: 1               #Only first-job characters can be companions.
+        tick_ms: 500                      #AI tick cadence. Raising this lowers server load.
+
+        follow_start_distance: 180        #Distance at which the companion starts walking toward the owner.
+        follow_offset_x: 60               #Formation offset behind the owner.
+        follow_max_step: 120              #Max position delta per follow tick.
+        same_map_recovery_distance: 700   #Distance before a single owner-relative snap is allowed.
+
+        portal_follow_enabled: true       #Companion tries to follow the owner through static portals.
+        portal_fallback_enabled: false    #Off by default: catch-up warp needs the Slice C audit sign-off.
+        portal_follow_grace_ms: 2000
+        portal_fallback_cooldown_ms: 10000
+        portal_source_radius: 250
+
+        attack_interval_ms: 1200
+        target_range: 350
+        target_level_delta: 10
+        allow_bosses: false
+        outgoing_damage_min_ratio: 0.70
+        outgoing_damage_max_ratio: 1.00
+        outgoing_damage_hp_cap_ratio: 0.25
+        outgoing_damage_absolute_cap: 100000
+
+        incoming_damage_enabled: true
+        incoming_damage_interval_ms: 1800
+        incoming_contact_range: 90
+        incoming_damage_min: 1
+        incoming_damage_max_ratio: 0.35
+
+        hp_potion_ratio: 0.45
+        mp_potion_ratio: 0.25
+        allowed_hp_potions: []            #Empty = any usable HP potion in the companion's inventory.
+        allowed_mp_potions: []
+
+        loot_enabled_default: false       #Companion looting stays opt-in.
+        loot_radius: 180
+        loot_interval_ms: 800
+
+        death_dismiss: true               #A dead companion is dismissed instead of auto-respawning.
+        death_delay_ms: 3000
