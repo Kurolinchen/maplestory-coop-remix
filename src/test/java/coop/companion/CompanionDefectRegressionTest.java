@@ -282,20 +282,48 @@ class CompanionDefectRegressionTest {
     }
 
     @Test
-    void saveFailedIsReachableFromADismissThatCannotFindTheCompanion() {
-        // The lifecycle service must hold the session (not report success) when
-        // the companion object is unreachable, otherwise the slot is freed while
-        // the character is still attached to a map and can be loaded twice.
+    void dismissWithoutACompanionObjectFailsAndHoldsTheSession() {
+        // A dismiss that cannot resolve the Character must NOT report success:
+        // nothing would be saved, the bot would stay attached to its map and
+        // party, and the freed slot would allow loading the same DB row twice.
+        CompanionSession s = newSession(1, 2);
+        assertTrue(s.compareAndSetState(CompanionSession.State.NEW,
+                CompanionSession.State.ACTIVE));
+
+        CompanionLifecycleService.Result result =
+                CompanionLifecycleService.getInstance().dismiss(s, null);
+
+        assertFalse(result.success(),
+                "dismissing an unreachable companion must fail");
+        assertEquals(CompanionSession.State.SAVE_FAILED, s.state(),
+                "the session must be held in SAVE_FAILED, not CLOSED");
+    }
+
+    @Test
+    void aHeldSessionCannotBeDismissedAgainIntoSuccess() {
         CompanionSession s = newSession(1, 2);
         s.compareAndSetState(CompanionSession.State.NEW, CompanionSession.State.ACTIVE);
-        s.compareAndSetState(CompanionSession.State.ACTIVE,
-                CompanionSession.State.DISMISSING);
-        s.compareAndSetState(CompanionSession.State.DISMISSING,
-                CompanionSession.State.SAVE_FAILED);
+        CompanionLifecycleService.getInstance().dismiss(s, null);
         assertEquals(CompanionSession.State.SAVE_FAILED, s.state());
-        // The manager keeps the entry, so a second load of the same row is refused.
-        assertTrue(CompanionManager.getInstance().isOwnerActive(1) == false
-                || CompanionManager.getInstance().isOwnerActive(1) == true);
+
+        // Every later attempt must keep failing rather than eventually reporting
+        // success and releasing the slot with unsaved state.
+        CompanionLifecycleService.Result again =
+                CompanionLifecycleService.getInstance().dismiss(s, null);
+        assertFalse(again.success());
+        assertEquals(CompanionSession.State.SAVE_FAILED, s.state());
+    }
+
+    @Test
+    void instancedMapRangesAreHardBlocked() {
+        for (int mapId : new int[]{910_010_000, 925_000_000, 960_000_000}) {
+            assertTrue(CompanionMapPolicy.isBlocked(mapId),
+                    "map " + mapId + " must be on the hard blocklist");
+        }
+        for (int mapId : new int[]{100_000_001, 100_020_000}) {
+            assertFalse(CompanionMapPolicy.isBlocked(mapId),
+                    "ordinary map " + mapId + " must not be blocked");
+        }
     }
 
     @Test

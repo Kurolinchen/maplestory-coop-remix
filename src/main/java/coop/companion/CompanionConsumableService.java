@@ -63,9 +63,10 @@ public final class CompanionConsumableService {
                 ? CoopDefaults.companionAllowedHpPotions()
                 : CoopDefaults.companionAllowedMpPotions();
 
-        Item potion = findPotion(bot, allowed);
+        Item potion = findPotion(bot, allowed, need);
         if (potion == null) {
-            return ConsumeResult.skipped("no usable potion in inventory");
+            return ConsumeResult.skipped("no usable "
+                    + (need == Need.HP ? "HP" : "MP") + " potion in inventory");
         }
         int itemId = potion.getItemId();
 
@@ -112,7 +113,14 @@ public final class CompanionConsumableService {
         return ConsumeResult.used(itemId);
     }
 
-    private Item findPotion(Character bot, List<Integer> allowed) {
+    /**
+     * Finds a potion that actually treats the given need.
+     *
+     * <p>The selection must distinguish HP from MP: picking the first recovery
+     * item would let a companion at low HP drink a pure-MP potion (and vice
+     * versa), burning the wrong stack while the real problem goes untreated.
+     */
+    private Item findPotion(Character bot, List<Integer> allowed, Need need) {
         boolean restricted = allowed != null && !allowed.isEmpty();
         for (Item item : bot.getInventory(InventoryType.USE).list()) {
             if (item == null || item.getQuantity() <= 0) {
@@ -123,7 +131,18 @@ public final class CompanionConsumableService {
                 if (allowed.contains(itemId)) {
                     return item;
                 }
-            } else if (isUsablePotion(itemId)) {
+                continue;
+            }
+            if (!isUsablePotion(itemId)) {
+                continue;
+            }
+            server.StatEffect effect =
+                    server.ItemInformationProvider.getInstance().getItemEffect(itemId);
+            if (effect == null) {
+                continue;
+            }
+            boolean heals = need == Need.HP ? effect.getHp() > 0 : effect.getMp() > 0;
+            if (heals) {
                 return item;
             }
         }

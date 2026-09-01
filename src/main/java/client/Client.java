@@ -1527,6 +1527,14 @@ public class Client extends ChannelInboundHandlerAdapter {
             return;
         }
 
+        // coop 0.1b (Slice F): channel change never reaches disconnectInternal,
+        // so the companion hook there would never fire and the bot would be
+        // orphaned on the old channel - unsaved, still attached to a map, and
+        // blocking any re-spawn. Dismiss it explicitly here instead.
+        if (coop.companion.CompanionManager.getInstance().isOwnerActive(player.getId())) {
+            coop.companion.CompanionController.getInstance().onOwnerDisconnect(player);
+        }
+
         String[] socket = Server.getInstance().getInetSocket(this, getWorld(), channel);
         if (socket == null) {
             sendPacket(PacketCreator.serverNotice(1, "Channel " + channel + " is currently disabled. Try another channel."));

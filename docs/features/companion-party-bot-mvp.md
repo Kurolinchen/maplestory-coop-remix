@@ -134,6 +134,9 @@ Every key is clamped in `CoopDefaults`. The dangerous defaults stay safe:
 | `allow_bosses` | `false` | Companions do not fight bosses |
 | `outgoing_damage_*` | `0.70 / 1.00 / 0.25 / 100000` | min ratio, max ratio, HP-fraction cap, absolute cap |
 | `incoming_damage_*` | `true / 1800 / 90 / 1 / 0.35` | enabled, interval, contact range, min, max ratio |
+| `hp_potion_ratio` / `mp_potion_ratio` | `0.45` / `0.25` | drink when the pool drops below this fraction |
+| `consume_interval_ms` | `1500` | minimum gap between two potion uses |
+| `allowed_hp_potions` / `allowed_mp_potions` | `[]` | empty = any recovery item that heals the needed pool |
 
 ## Integrity rules (all enforced, all tested)
 
@@ -159,6 +162,24 @@ Every key is clamped in `CoopDefaults`. The dangerous defaults stay safe:
   A failed save moves the session to `SAVE_FAILED` and holds it rather than
   dropping the character. The owner-disconnect hook and the server-shutdown hook
   both run before the owner's map/party teardown.
+
+## Persistence caveats (important for a long playtest)
+
+A companion is loaded **outside** `PlayerStorage`, which means:
+
+- **`CharacterAutosaverTask` never sees it.** The hourly autosave and
+  `!saveall` both iterate world player storage, so a companion's progress is
+  only written on a **successful dismiss**, on owner disconnect/logout, or on a
+  clean server shutdown. A `SIGKILL` or a power loss loses everything since the
+  companion was spawned.
+- **A failed save holds the session** in `SAVE_FAILED` instead of releasing it.
+  That is deliberate (releasing would allow a second load of the same row), but
+  it currently means the owner cannot re-spawn until the server restarts. A
+  `@companion force-release` escape hatch is a follow-up.
+- **Do not change channel while a companion is out.** Channel change does not
+  go through `disconnectInternal`; the hook was added to `Client.changeChannel`
+  so the companion is dismissed there, but if you hit an edge case the safe
+  move is `@companion dismiss` before switching channels.
 
 ## Known limitations (deliberate for this milestone)
 
