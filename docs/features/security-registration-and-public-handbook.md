@@ -212,11 +212,13 @@ ops/smoke-test.sh # boots the game server, checks migrations and port 8484
    partial account import into a DB already recording these changesets, use a
    fresh migration instead of trusting the old changelog state.
 
-### Registration app (VPS dev integration, behind Caddy — deployed)
+### Registration app (VPS dev integration, behind the shared Caddy edge — deployed)
 
 Deployed via `ops/bootstrap-vps.sh` → `ops/provision-vps-registration.sh` →
-`ops/deploy-dev.sh` → `ops/verify-vps.sh` (owner-approved, see `docs/DEPLOYMENT.md`
-and D17). Fixed internal networks and exact-host DB grant as specified there.
+`ops/deploy-dev.sh` → `ops/verify-vps.sh` (owner-approved, see `docs/DEPLOYMENT.md`,
+D17/D18). Fixed internal networks and exact-host DB grant as specified there.
+The TLS edge is the shared cookwiki Caddy on host ports 80/443; there is no
+DEV Caddy container.
 
 1. `curl -si https://dream-ms.duckdns.org/health/ready` → `200 ready`
    (503 while the DB is unreachable or the user is not provisioned).

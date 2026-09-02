@@ -307,3 +307,31 @@ cost: two more networks with fixed subnets (collision is checked at bootstrap),
 a pinned Caddy digest to bump deliberately, and a deploy order (game → DB user →
 registration → Caddy) that must not be reordered. Production stays unconfigured;
 replicating this there is a new, separately approved decision.
+
+## D18 — The shared cookwiki Caddy is the DEV TLS edge for the registration (2026-09-02, accepted)
+
+Context: The VPS already runs the owner's cookwiki stack whose Caddy owns
+host ports 80/443 (a second Caddy cannot bind them — observed as a clean
+deploy failure). Hosting two public TLS edges on one host is the only
+choice to avoid non-standard ports, and non-standard ports would break
+plain ACME issuance and clean browser URLs.
+
+Decision (owner-approved): No `caddy` service exists in the DEV compose.
+The cookwiki edge (`cookwiki-caddy-1`, `/opt/cookwiki/Caddyfile`,
+`admin off`) serves the registration site: `ops/_remote-deploy-steps.sh`
+renders `ops/Caddyfile.vps` and merges it idempotently between markers
+into that file (host-specific, one backup `Caddyfile.pre-maple`), connects
+`cookwiki-caddy-1` to `maple-dev-web-net` with the fixed address
+`172.30.250.2` and restarts the container (brief cookwiki downtime; there
+is no admin API under `admin off`). The app keeps
+`REG_TRUSTED_PROXY_IPS=172.30.250.2`, so the exact-proxy contract (D13)
+is unchanged. The cookwiki `compose.yaml` now also lists
+`maple-dev-web-net` (`external`) with that fixed IP, so a future cookwiki
+redeploy cannot silently drop the integration (backup `compose.yaml.bak-maple`).
+
+Consequences: Standard ports, one ACME account, real certificates for
+both hosts; the maple DEV stack needs no edge image at all. Costs: the
+registration availability now depends on the cookwiki Caddy, its restart
+runs inside `deploy-dev.sh`, and the `deploy` failure domain includes the
+cookwiki Caddyfile. A future production environment gets its own edge and
+is a separate decision.

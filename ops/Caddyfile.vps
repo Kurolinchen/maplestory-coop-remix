@@ -1,6 +1,8 @@
 # Caddy site snippet for the public registration app (VPS DEV).
-# Checked-in template installed by the owner-approved DEV Compose integration.
-# Rendered copies stay outside git.
+# Deployed by ops/_remote-deploy-steps.sh: rendered with the public hostname and
+# merged between markers into the shared edge Caddyfile (/opt/cookwiki/Caddyfile,
+# cookwiki-caddy-1 at 172.30.250.2 on maple-dev-web-net). This file itself is a
+# template; rendered copies stay outside git.
 #
 #   registration container  ->  Caddy (80/443)  ->  internet
 #

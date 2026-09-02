@@ -165,16 +165,22 @@ fails closed with `503` on `/health/ready`.
 - HSTS is intentionally **not** set yet
 
 The integration is in `ops/bootstrap-vps.sh` (generated DEV compose) and `ops/deploy-dev.sh`
-(rendering + deploy). The topology (D17 in `docs/DECISIONS.md`):
+(rendering + deploy). The topology (D17, D18 in `docs/DECISIONS.md`):
 
 | Network | Subnet | Members |
 | --- | --- | --- |
 | `maple-dev-net` | dynamic (existing) | db, maplestory |
-| `maple-dev-web-net` | `172.30.250.0/24` | caddy `172.30.250.2`, registration `172.30.250.3` |
+| `maple-dev-web-net` | `172.30.250.0/24` | **shared edge (cookwiki-caddy-1)** `172.30.250.2`, registration `172.30.250.3` |
 | `maple-dev-registration-db-net` | `172.30.251.0/29`, `internal: true` | db `172.30.251.2`, registration `172.30.251.3` |
 
-- Caddy publishes only host ports **80/tcp** and **443/tcp**; registration and MySQL publish
-  nothing (`REG_TRUSTED_PROXY_IPS=172.30.250.2`).
+- The DEV compose has **no Caddy service**. The TLS edge is the shared cookwiki Caddy
+  (owner-approved D18): `ops/_remote-deploy-steps.sh` renders `ops/Caddyfile.vps` and merges
+  it idempotently into `/opt/cookwiki/Caddyfile` between markers, connects `cookwiki-caddy-1`
+  to `maple-dev-web-net` at `172.30.250.2` and restarts it (brief cookwiki downtime, no admin
+  API). Backups on the VPS: `/opt/cookwiki/Caddyfile.pre-maple`,
+  `/opt/cookwiki/compose.yaml.bak-maple` (compose now pins the fixed IP too).
+- The shared edge publishes only host ports **80/tcp** and **443/tcp**; registration and
+  MySQL publish nothing (`REG_TRUSTED_PROXY_IPS=172.30.250.2`).
 - `ops/Caddyfile.vps` is the reviewed template; rendered Caddyfiles are generated artifacts
   and are not committed.
 - Secrets live in `/opt/maple-dev/secrets/` (`reg_db_password`, `reg_invite_passphrase`),
@@ -191,10 +197,11 @@ ops/verify-vps.sh                            # read-only checks incl. grants and
 ```
 
 `deploy-dev.sh` is phase-isolated: it starts db/game first, then provisions the DB user, then
-starts registration and only after its healthcheck renders/validates and starts Caddy. A web
-failure therefore never touches a running game server. Web rollback is independent:
-`docker compose ... stop caddy registration` removes the public surface; secrets and the
-Caddy data volume (certificates) stay for analysis.
+starts registration and only after its healthcheck merges/validates the site block into the
+shared edge and restarts it. A web failure therefore never touches a running game server.
+Web rollback is independent: remove the marker block from `/opt/cookwiki/Caddyfile`,
+restart `cookwiki-caddy-1`, `docker compose ... stop registration`; the pre-merge backups
+`Caddyfile.pre-maple` / `compose.yaml.bak-maple` stay on the VPS for analysis.
 
 Rotating the invite passphrase: replace `/opt/maple-dev/secrets/reg_invite_passphrase`
 (new content, `chown 10001:10001`, `chmod 400`) and restart the registration container.

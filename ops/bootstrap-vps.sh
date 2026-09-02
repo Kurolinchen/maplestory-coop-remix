@@ -125,39 +125,9 @@ services:
       maple-dev-registration-db-net:
         ipv4_address: 172.30.251.3
 
-  caddy:
-    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
-    depends_on:
-      registration:
-        condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - maple-dev-caddy-data:/data
-      - maple-dev-caddy-config:/config
-    read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-    networks:
-      maple-dev-web-net:
-        ipv4_address: 172.30.250.2
-
 volumes:
   maple-dev-db:
     name: maple-dev-db
-  maple-dev-caddy-data:
-    name: maple-dev-caddy-data
-  maple-dev-caddy-config:
-    name: maple-dev-caddy-config
 
 networks:
   maple-dev-net:
@@ -172,7 +142,7 @@ networks:
 COMPOSE
 mv /opt/maple-dev/config/docker-compose.yml.tmp /opt/maple-dev/config/docker-compose.yml
 
-# 5. Host firewall: SSH, MapleStory and the Caddy TLS edge only.
+# 5. Host firewall: SSH, MapleStory and the shared Caddy TLS edge (cookwiki) only.
 if ! command -v ufw >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y ufw

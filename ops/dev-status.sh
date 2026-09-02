@@ -17,6 +17,10 @@ if [[ -n "$registration_id" ]]; then
 else
   echo "not deployed"
 fi
+echo "== shared edge (cookwiki caddy) =="
+printf 'web-net-ip=%s site-block=%s\n' \
+  "$(docker inspect -f '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}' cookwiki-caddy-1 2>/dev/null || echo unconnected)" \
+  "$(grep -c 'maple-dev-registration site' /opt/cookwiki/Caddyfile 2>/dev/null || echo 0)"
 echo "== db volume =="; docker volume ls --filter name=maple-dev || true
 echo "== migrations =="
 docker compose -f ../config/docker-compose.yml --env-file ../config/.env exec -T db sh -c \

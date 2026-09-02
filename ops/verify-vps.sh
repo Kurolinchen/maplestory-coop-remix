@@ -35,17 +35,18 @@ check_network maple-dev-web-net 172.30.250.0/24 false
 check_network maple-dev-registration-db-net 172.30.251.0/29 true
 cd /opt/maple-dev/app
 compose=(docker compose -f ../config/docker-compose.yml --env-file ../config/.env)
-for service in db maplestory registration caddy; do
+for service in db maplestory registration; do
   [[ "$("${compose[@]}" ps --status running -q "$service")" ]] || fail "$service is not running"
 done
 registration_id="$("${compose[@]}" ps -q registration)"
-caddy_id="$("${compose[@]}" ps -q caddy)"
 [[ "$(docker inspect -f '{{.State.Health.Status}}' "$registration_id")" == healthy ]] || fail "registration is not healthy"
-[[ "$(docker inspect -f '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}' "$caddy_id")" == 172.30.250.2 ]] || fail "Caddy IP"
 [[ "$(docker inspect -f '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}' "$registration_id")" == 172.30.250.3 ]] || fail "registration web IP"
 [[ "$(docker inspect -f '{{with index .NetworkSettings.Networks "maple-dev-registration-db-net"}}{{.IPAddress}}{{end}}' "$registration_id")" == 172.30.251.3 ]] || fail "registration DB IP"
 [[ -z "$("${compose[@]}" port db 3306 2>/dev/null)" ]] || fail "DB port is published"
 [[ -z "$("${compose[@]}" port registration 8080 2>/dev/null)" ]] || fail "registration port is published"
+[[ "$(docker inspect -f '{{.Name}}' cookwiki-caddy-1 2>/dev/null)" == "/cookwiki-caddy-1" ]] || fail "shared edge container missing"
+[[ "$(docker inspect -f '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}' cookwiki-caddy-1)" == 172.30.250.2 ]] || fail "shared edge web-net IP"
+[[ "$(sudo docker exec cookwiki-caddy-1 grep -c 'maple-dev-registration site' /etc/caddy/Caddyfile 2>/dev/null || echo 0)" -ge 1 ]] || fail "edge has no maple site block"
 for secret in ../secrets/reg_db_password ../secrets/reg_invite_passphrase; do
   [[ -s "$secret" ]] || fail "missing registration secret"
   [[ "$(stat -c '%a:%u:%g' "$secret")" == 400:10001:10001 ]] || fail "registration secret permissions"

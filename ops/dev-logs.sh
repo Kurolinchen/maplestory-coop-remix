@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote dev logs. Usage: ops/dev-logs.sh [server|db|registration|caddy]
+# Remote dev logs. Usage: ops/dev-logs.sh [server|db|registration]
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
 
 VPS_HOST="${VPS_HOST:-}"
@@ -13,7 +13,7 @@ cd /opt/maple-dev/app
 case "$svc" in
   server) svc="maplestory" ;;
   db)     svc="db" ;;
-  registration|caddy) ;;
+  registration) ;;
   *) printf 'Unknown service: %s\n' "$svc" >&2; exit 1 ;;
 esac
 docker compose -f ../config/docker-compose.yml --env-file ../config/.env logs -f --tail=200 "$svc"

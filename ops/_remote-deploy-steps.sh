@@ -41,13 +41,9 @@ REG_RESOURCE_DIR=/opt/registration/public
 EOF
 chmod 600 "$CONFIG/registration.env.tmp"
 mv "$CONFIG/registration.env.tmp" "$CONFIG/registration.env"
-sed "s/\[REG_PUBLIC_HOST\]/$REG_PUBLIC_HOST/g" ops/Caddyfile.vps > "$CONFIG/Caddyfile.tmp"
-mv "$CONFIG/Caddyfile.tmp" "$CONFIG/Caddyfile"
-chmod 644 "$CONFIG/Caddyfile"
 
 "${COMPOSE[@]}" config --quiet
 "${COMPOSE[@]}" build maplestory registration
-"${COMPOSE[@]}" pull caddy
 "${COMPOSE[@]}" up -d db maplestory
 
 ready=0
@@ -106,8 +102,46 @@ done
   exit 1
 }
 
-"${COMPOSE[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-"${COMPOSE[@]}" up -d caddy
+shared_edge=/opt/cookwiki/Caddyfile
+begin_marker="# maple-dev-registration site (managed by maple-dev ops)"
+end_marker="# end maple-dev-registration site"
+[[ "$(sudo docker inspect -f '{{.Name}}' cookwiki-caddy-1 2>/dev/null)" == "/cookwiki-caddy-1" ]] || {
+  printf '%s\n' "Shared edge container cookwiki-caddy-1 not found." >&2
+  exit 1
+}
+if ! sudo docker inspect -f      '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}'      cookwiki-caddy-1 | grep -q .; then
+  sudo docker network connect --ip 172.30.250.2 maple-dev-web-net cookwiki-caddy-1
+fi
+[[ "$(sudo docker inspect -f \
+     '{{with index .NetworkSettings.Networks "maple-dev-web-net"}}{{.IPAddress}}{{end}}' \
+     cookwiki-caddy-1)" == 172.30.250.2 ]] || {
+  printf '%s\n' "Shared edge has unexpected maple-dev-web-net address." >&2
+  exit 1
+}
+
+[[ "$REG_PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || {
+  printf '%s\n' "Registration host contains unsafe characters." >&2
+  exit 1
+}
+rendered=/tmp/maple-registration-site.caddy
+sed "s/\[REG_PUBLIC_HOST\]/$REG_PUBLIC_HOST/g" ops/Caddyfile.vps > "$rendered"
+[[ -s "$rendered" ]] || { printf '%s\n' "Rendered edge site block is empty." >&2; exit 1; }
+sudo test -f "$shared_edge.pre-maple" || sudo cp "$shared_edge" "$shared_edge.pre-maple"
+filtered=/tmp/cookwiki-caddyfile.filtered
+sudo awk -v b="$begin_marker" -v e="$end_marker" \
+  'index($0,b){skip=1;next} index($0,e){skip=0;next} !skip' "$shared_edge" > "$filtered"
+[[ -s "$filtered" ]] || { printf '%s\n' "Filtered shared Caddyfile is empty." >&2; exit 1; }
+merged=/tmp/cookwiki-caddyfile.merged
+{
+  cat "$filtered"
+  printf '\n%s\n' "$begin_marker"
+  cat "$rendered"
+  printf '%s\n' "$end_marker"
+} > "$merged"
+sudo install -m 644 -o root -g root "$merged" "$shared_edge"
+docker exec cookwiki-caddy-1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+sudo docker restart cookwiki-caddy-1 >/dev/null
+
 https_ready=0
 for _ in $(seq 1 90); do
   if curl --fail --silent --show-error --max-time 5 "$REG_PUBLIC_ORIGIN/health/ready" | grep -qx ready; then
@@ -117,7 +151,7 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 [[ "$https_ready" == 1 ]] || {
-  "${COMPOSE[@]}" logs --tail=100 caddy >&2 || true
+  sudo docker logs --tail=100 cookwiki-caddy-1 >&2 || true
   printf '%s\n' "Public registration endpoint did not become ready." >&2
   exit 1
 }
