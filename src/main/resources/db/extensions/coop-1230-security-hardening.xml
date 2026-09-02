@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="coop-1230" author="coop">
+        <validCheckSum>9:e8f4ecd631ec956f1ee3da3d9e68c9da</validCheckSum>
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="mysql"/>
+            <tableExists tableName="accounts"/>
+            <tableExists tableName="characters"/>
+        </preConditions>
+        <comment>Neutralize the publicly documented upstream seed credential without deleting account data.</comment>
+        <sql>
+            UPDATE characters AS c
+            JOIN accounts AS a ON a.id = c.accountid
+            SET c.gm = 0
+            WHERE BINARY a.password = BINARY '$2y$12$aFD9BDeUocDMY1X4tDYDyeJw/HhkQwCQWs3KAY7gCaRG0cpqJcaL.';
+
+            UPDATE accounts
+            SET password = '$2y$12$OF6neGC9zX0S8CyKgbmdie.Mn/mWUdgjCNkqdDl2VNmZ/UraudUZ2',
+                banned = 1,
+                loggedin = 0,
+                banreason = 'Disabled known seeded credentials by coop-1230'
+            WHERE BINARY password = BINARY '$2y$12$aFD9BDeUocDMY1X4tDYDyeJw/HhkQwCQWs3KAY7gCaRG0cpqJcaL.';
+
+            INSERT INTO accounts (`name`, password, banned, loggedin, banreason, tos)
+            SELECT 'admin',
+                   '$2y$12$OF6neGC9zX0S8CyKgbmdie.Mn/mWUdgjCNkqdDl2VNmZ/UraudUZ2',
+                   1, 0, 'Reserved disabled account name created by coop-1230', 1
+            FROM (SELECT 1) AS probe
+            WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE `name` = 'admin');
+        </sql>
+    </changeSet>
+
+    <changeSet id="coop-1231" author="coop">
+        <!-- Accept the checksum from the disposable dev DB that ran the earlier,
+             uncommitted combined DML/DDL form of this changeset. -->
+        <validCheckSum>9:8c5bf0fdef6146ef69aab66b009482b5</validCheckSum>
+        <comment>Normalize existing GM ranks before adding the database constraint.</comment>
+        <sql>
+            UPDATE characters SET gm = 0 WHERE gm &lt; 0;
+            UPDATE characters SET gm = 6 WHERE gm &gt; 6;
+        </sql>
+    </changeSet>
+
+    <changeSet id="coop-1232" author="coop" runInTransaction="false">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                WHERE CONSTRAINT_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'characters'
+                  AND CONSTRAINT_NAME = 'chk_characters_gm_level'
+            </sqlCheck>
+        </preConditions>
+        <comment>Enforce the supported GM rank range at the database boundary.</comment>
+        <sql>
+            ALTER TABLE characters
+                ADD CONSTRAINT chk_characters_gm_level CHECK (gm BETWEEN 0 AND 6);
+        </sql>
+    </changeSet>
+
+    <changeSet id="coop-1233" author="coop">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*)
+                FROM information_schema.CHECK_CONSTRAINTS AS cc
+                JOIN information_schema.TABLE_CONSTRAINTS AS tc
+                  ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA
+                 AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+                WHERE cc.CONSTRAINT_SCHEMA = DATABASE()
+                  AND tc.TABLE_NAME = 'characters'
+                  AND cc.CONSTRAINT_NAME = 'chk_characters_gm_level'
+                  AND LOWER(REPLACE(REPLACE(cc.CHECK_CLAUSE, '`', ''), ' ', '')) = '(gmbetween0and6)'
+                  AND tc.ENFORCED = 'YES'
+            </sqlCheck>
+        </preConditions>
+        <comment>Verify GM constraint semantics and reserve every case variant of the admin account name.</comment>
+        <sql>
+            UPDATE characters AS c
+            JOIN accounts AS a ON a.id = c.accountid
+            SET c.gm = 0
+            WHERE LOWER(a.name) = 'admin';
+
+            UPDATE accounts
+            SET password = '$2y$12$OF6neGC9zX0S8CyKgbmdie.Mn/mWUdgjCNkqdDl2VNmZ/UraudUZ2',
+                banned = 1,
+                loggedin = 0,
+                banreason = 'Reserved account name enforced by coop-1233'
+            WHERE LOWER(name) = 'admin';
+        </sql>
+    </changeSet>
+</databaseChangeLog>

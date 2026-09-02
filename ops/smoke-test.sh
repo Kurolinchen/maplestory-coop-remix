@@ -53,7 +53,12 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
   hint_seen_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_character_hint_seen';")"
   hint_job_filter_col="$(db_query "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_milestone_hints' AND COLUMN_NAME = 'job_filter';")"
   storage_uq="$(db_query "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'storages' AND INDEX_NAME = 'uq_storages_account_world';")"
-  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033','coop-1100','coop-1210','coop-1211','coop-1212','coop-1220','coop-1221');")"
+  coop_ids_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID IN ('coop-1001','coop-1002','coop-1003','coop-1010','coop-1011','coop-1012','coop-1020','coop-1030','coop-1031','coop-1032','coop-1033','coop-1100','coop-1210','coop-1211','coop-1212','coop-1220','coop-1221','coop-1230','coop-1231','coop-1232','coop-1233');")"
+  seed_credentials_active="$(db_query "SELECT COUNT(*) FROM accounts WHERE BINARY password = BINARY '\$2y\$12\$aFD9BDeUocDMY1X4tDYDyeJw/HhkQwCQWs3KAY7gCaRG0cpqJcaL.';")"
+  seed_gm_characters="$(db_query "SELECT COUNT(*) FROM characters AS c JOIN accounts AS a ON a.id = c.accountid WHERE BINARY a.password = BINARY '\$2y\$12\$OF6neGC9zX0S8CyKgbmdie.Mn/mWUdgjCNkqdDl2VNmZ/UraudUZ2' AND c.gm > 0;")"
+  reserved_admin_safe="$(db_query "SELECT COUNT(*) FROM accounts WHERE LOWER(name) = 'admin' AND BINARY password = BINARY '\$2y\$12\$OF6neGC9zX0S8CyKgbmdie.Mn/mWUdgjCNkqdDl2VNmZ/UraudUZ2' AND banned = 1 AND loggedin = 0;")"
+  gm_level_constraint="$(db_query "SELECT COUNT(*) FROM information_schema.CHECK_CONSTRAINTS AS cc JOIN information_schema.TABLE_CONSTRAINTS AS tc ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME WHERE cc.CONSTRAINT_SCHEMA = 'cosmic' AND tc.TABLE_NAME = 'characters' AND cc.CONSTRAINT_NAME = 'chk_characters_gm_level' AND LOWER(REPLACE(REPLACE(cc.CHECK_CLAUSE, '\`', ''), ' ', '')) = '(gmbetween0and6)' AND tc.ENFORCED = 'YES';")"
+  invalid_gm_rows="$(db_query "SELECT COUNT(*) FROM characters WHERE gm < 0 OR gm > 6;")"
   wrong_stack_rows="$(db_query "SELECT COUNT(*) FROM coop_stack_overrides WHERE item_id IN (2100000,2100001,2100002,4001000,4001001,4001002,4001010,4001011,4001012);")"
   coop_1100_present="$(db_query "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID = 'coop-1100';")"
   companion_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_companion_bindings';")"
@@ -66,7 +71,7 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
   telemetry_table="$(db_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_early_game_exp_log';")"
   telemetry_source_default="$(db_query "SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'cosmic' AND TABLE_NAME = 'coop_early_game_exp_log' AND COLUMN_NAME = 'source';")"
 
-  expected_ids=17
+  expected_ids=21
   if [[ "$coop_changesets" -ge "$expected_ids" \
         && "$coop_ids_present" -eq "$expected_ids" \
         && "$charslot_default" == "15" \
@@ -85,7 +90,12 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
         && "$kits_seed" -ge 8 \
         && "$cygnus_ammo" -eq 2 \
         && "$telemetry_table" -eq 1 \
-        && "$telemetry_source_default" == "UNATTRIBUTED" ]]; then
+        && "$telemetry_source_default" == "UNATTRIBUTED" \
+        && "$seed_credentials_active" -eq 0 \
+        && "$seed_gm_characters" -eq 0 \
+        && "$reserved_admin_safe" -eq 1 \
+        && "$gm_level_constraint" -eq 1 \
+        && "$invalid_gm_rows" -eq 0 ]]; then
     log "DB checks passed: ${coop_changesets} coop changesets (${coop_ids_present}/${expected_ids} expected), charslots=${charslot_default}, useslots=${useslots_default}, stack overrides=${stack_overrides}, hints=${hint_rows}, hint table+col=${hint_seen_table}/${hint_job_filter_col}, wrong-family rows=${wrong_stack_rows}, storage dupes=${storage_dupes}, uq=${storage_uq}, companion table=${companion_table} uq=${companion_uq}, kits table=${kits_table} rows=${kits_seed} cygnus=${cygnus_ammo}, telemetry table=${telemetry_table} source=${telemetry_source_default}."
     db_ok=1
   else
@@ -108,6 +118,11 @@ if [[ "$ok" == 1 && "$port_ok" == 1 ]]; then
     warn "  Cygnus ammunition rows: ${cygnus_ammo:-<error>} (expected 2)"
     warn "  early-game telemetry table: ${telemetry_table:-<error>} (expected 1)"
     warn "  telemetry source default: ${telemetry_source_default:-<error>} (expected UNATTRIBUTED)"
+    warn "  active seeded credentials: ${seed_credentials_active:-<error>} (expected 0)"
+    warn "  seeded GM characters: ${seed_gm_characters:-<error>} (expected 0)"
+    warn "  reserved admin tombstone: ${reserved_admin_safe:-<error>} (expected 1)"
+    warn "  GM range constraint: ${gm_level_constraint:-<error>} (expected 1)"
+    warn "  GM rows outside 0..6: ${invalid_gm_rows:-<error>} (expected 0)"
   fi
 fi
 
