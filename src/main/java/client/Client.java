@@ -26,6 +26,7 @@ import config.YamlConfig;
 import constants.game.GameConstants;
 import constants.id.MapId;
 import coop.config.CoopDefaults;
+import coop.security.GmLevel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -126,7 +127,7 @@ public class Client extends ChannelInboundHandlerAdapter {
     private String accountName = null;
     private int world;
     private volatile long lastPong;
-    private int gmlevel;
+    private volatile int gmlevel;
     private Set<String> macs = new HashSet<>();
     private Map<String, ScriptEngine> engines = new HashMap<>();
     private byte characterSlots = 3;
@@ -1197,7 +1198,7 @@ public class Client extends ChannelInboundHandlerAdapter {
     }
 
     public void setGMLevel(int level) {
-        gmlevel = level;
+        gmlevel = GmLevel.normalize(level);
     }
 
     public void setScriptEngine(String name, ScriptEngine e) {

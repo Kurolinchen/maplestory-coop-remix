@@ -80,8 +80,8 @@ class MobSkillFactoryTest {
     }
 
     @Test
-    void shouldThrowExceptionOnNonExisting() {
-        assertThrows(IllegalArgumentException.class, () -> MobSkillFactory.getMobSkillOrThrow(MobSkillType.DEFENSE_UP, 1));
+    void shouldThrowExceptionOnNonExistingLevel() {
+        assertThrows(IllegalArgumentException.class, () -> MobSkillFactory.getMobSkillOrThrow(MobSkillType.DEFENSE_UP, 9999));
     }
 
 }

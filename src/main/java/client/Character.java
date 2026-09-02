@@ -43,6 +43,7 @@ import client.processor.action.PetAutopotProcessor;
 import client.processor.npc.FredrickProcessor;
 import config.YamlConfig;
 import coop.config.CoopDefaults;
+import coop.security.GmLevel;
 import constants.game.ExpTable;
 import constants.game.GameConstants;
 import constants.id.ItemId;
@@ -215,7 +216,7 @@ public class Character extends AbstractCharacterObject {
     private int messengerposition = 4;
     private int slots = 0;
     private int energybar;
-    private int gmLevel;
+    private volatile int gmLevel;
     private int ci = 0;
     private FamilyEntry familyEntry;
     private int familyId;
@@ -5597,8 +5598,7 @@ public class Character extends AbstractCharacterObject {
     }
 
     public void setGMLevel(int level) {
-        this.gmLevel = Math.min(level, 6);
-        this.gmLevel = Math.max(level, 0);
+        this.gmLevel = GmLevel.normalize(level);
 
         whiteChat = gmLevel >= 4;   // thanks ozanrijen for suggesting default white chat
     }
@@ -8859,7 +8859,7 @@ public class Character extends AbstractCharacterObject {
     }
 
     public void setGM(int level) {
-        this.gmLevel = level;
+        setGMLevel(level);
     }
 
     public void setGuildId(int _id) {

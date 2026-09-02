@@ -26,6 +26,8 @@ package client.command.commands.gm6;
 import client.Character;
 import client.Client;
 import client.command.Command;
+import coop.security.GmLevel;
+import coop.security.GmLevelPersistence;
 
 public class SetGmLevelCommand extends Command {
     {
@@ -40,11 +42,28 @@ public class SetGmLevelCommand extends Command {
             return;
         }
 
-        int newLevel = Integer.parseInt(params[1]);
+        int newLevel;
+        try {
+            newLevel = Integer.parseInt(params[1]);
+        } catch (NumberFormatException e) {
+            player.yellowMessage("GM level must be a number from 0 to 6.");
+            return;
+        }
+        if (!GmLevel.isValid(newLevel)) {
+            player.yellowMessage("GM level must be from 0 to 6.");
+            return;
+        }
+
         Character target = c.getChannelServer().getPlayerStorage().getCharacterByName(params[0]);
         if (target != null) {
-            target.setGMLevel(newLevel);
-            target.getClient().setGMLevel(newLevel);
+            synchronized (target) {
+                if (!GmLevelPersistence.updateCharacter(target.getId(), newLevel)) {
+                    player.dropMessage("Could not persist the GM level. No change was applied.");
+                    return;
+                }
+                target.setGMLevel(newLevel);
+                target.getClient().setGMLevel(target.gmLevel());
+            }
 
             target.dropMessage("You are now a level " + newLevel + " GM. See @commands for a list of available commands.");
             player.dropMessage(target + " is now a level " + newLevel + " GM.");
