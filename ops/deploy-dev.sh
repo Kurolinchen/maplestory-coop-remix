@@ -87,18 +87,18 @@ sed "s/\[REG_PUBLIC_HOST\]/$REG_PUBLIC_HOST/g" "$APP/ops/Caddyfile.vps" > "$CONF
 mv "$CONFIG/Caddyfile.tmp" "$CONFIG/Caddyfile"
 chmod 644 "$CONFIG/Caddyfile"
 
-"${COMPOSE[@]}" config --quiet
-"${COMPOSE[@]}" build maplestory registration
-"${COMPOSE[@]}" pull caddy
-"${COMPOSE[@]}" up -d db maplestory
+"${COMPOSE[@]}" config --quiet < /dev/null
+"${COMPOSE[@]}" build maplestory registration < /dev/null
+"${COMPOSE[@]}" pull caddy < /dev/null
+"${COMPOSE[@]}" up -d db maplestory < /dev/null
 
 ready=0
 for _ in $(seq 1 180); do
-  if "${COMPOSE[@]}" logs maplestory 2>/dev/null | grep 'Cosmic is now online' >/dev/null; then
+  if "${COMPOSE[@]}" logs maplestory < /dev/null 2>/dev/null | grep 'Cosmic is now online' >/dev/null; then
     ready=1
     break
   fi
-  state="$("${COMPOSE[@]}" ps --format '{{.State}}' maplestory 2>/dev/null || true)"
+  state="$("${COMPOSE[@]}" ps < /dev/null --format '{{.State}}' maplestory 2>/dev/null || true)"
   [[ "$state" != "exited" && "$state" != "dead" ]] || break
   sleep 1
 done
@@ -136,7 +136,7 @@ grant_state="$("${COMPOSE[@]}" exec -T db sh -c \
   | paste -sd ' ' -)"
 [[ "$grant_state" == "1 1 0 1" ]] || { printf 'Unexpected registration DB grants: %s\n' "$grant_state" >&2; exit 1; }
 
-"${COMPOSE[@]}" up -d registration
+"${COMPOSE[@]}" up -d registration < /dev/null
 registration_id="$("${COMPOSE[@]}" ps -q registration)"
 for _ in $(seq 1 60); do
   [[ "$(docker inspect -f '{{.State.Health.Status}}' "$registration_id" 2>/dev/null || true)" == healthy ]] && break
@@ -148,8 +148,8 @@ done
   exit 1
 }
 
-"${COMPOSE[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-"${COMPOSE[@]}" up -d caddy
+"${COMPOSE[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile < /dev/null
+"${COMPOSE[@]}" up -d caddy < /dev/null
 https_ready=0
 for _ in $(seq 1 90); do
   if curl --fail --silent --show-error --max-time 5 "$REG_PUBLIC_ORIGIN/health/ready" | grep -qx ready; then
