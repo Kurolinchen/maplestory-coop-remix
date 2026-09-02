@@ -49,7 +49,7 @@ fi
 cd "$APP"
 [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT" ]] \
   || { printf '%s\n' "Remote commit does not match requested commit." >&2; exit 1; }
-exec bash ops/_remote-deploy-steps.sh "$@"
+exec bash ops/_remote-deploy-steps.sh "$BRANCH" "$@"
 BOOT
 
 log "Remote dev deploy finished (branch=$BRANCH commit=${COMMIT:0:12}). Check: ops/dev-status.sh"
