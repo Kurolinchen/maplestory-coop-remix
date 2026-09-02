@@ -1,0 +1,120 @@
+:root {
+    --ink: #23282f;
+    --panel: #fffdf7;
+    --accent: #d98324;
+    --accent-dark: #a75f13;
+    --line: #e4dcc9;
+    --muted: #6b6f76;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(160deg, #f6f1e4 0%, #e9f0e4 100%);
+    color: var(--ink);
+    font: 16px/1.5 "DejaVu Sans", "Noto Sans", sans-serif;
+}
+
+main.card {
+    width: 100%;
+    max-width: 560px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 28px 30px 32px;
+    box-shadow: 0 18px 40px rgba(35, 40, 47, 0.12);
+}
+
+h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    letter-spacing: 0.2px;
+}
+
+h2 {
+    margin: 26px 0 8px;
+    font-size: 19px;
+}
+
+p {
+    margin: 0 0 14px;
+}
+
+.muted {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.error {
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border-left: 4px solid #b3261e;
+    background: #fdecea;
+    color: #611a15;
+    font-size: 14px;
+}
+
+label {
+    display: block;
+    margin: 14px 0 6px;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font: inherit;
+}
+
+input:focus {
+    outline: 3px solid rgba(217, 131, 36, 0.35);
+    outline-offset: 1px;
+    border-color: var(--accent);
+}
+
+button, a.button {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+button:hover, a.button:hover {
+    background: var(--accent-dark);
+}
+
+ul {
+    margin: 0 0 14px;
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 6px;
+}
+
+code {
+    background: #f1ece0;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 14px;
+}

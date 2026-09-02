@@ -2,6 +2,13 @@
 .idea
 .git
 .github
+.local
+target
+logs
+ops/.env
+ops/config
+ops/backups
+docs/handbook/build
 
 # Not used by the build.
 docs
