@@ -1,0 +1,72 @@
+# Caddy site snippet for the public registration app (VPS DEV).
+# Checked-in template installed by the owner-approved DEV Compose integration.
+# Rendered copies stay outside git.
+#
+#   registration container  ->  Caddy (80/443)  ->  internet
+#
+# Caddy is the only TLS edge and the only thing that publishes the app. The
+# registration container is never published on a host port; it is reachable only
+# as the compose service name `registration` on the internal network.
+
+# Automatic HTTPS (Let's Encrypt) is implied by naming a public hostname.
+[REG_PUBLIC_HOST] {
+	encode zstd gzip
+
+	# Outermost security headers; the app sets the same values itself.
+	# HSTS is deliberately NOT set yet - see docs/DECISIONS.md (registration
+	# service decisions). Add `Strict-Transport-Security` only after the owner
+	# signs off on the final hostname.
+	header {
+		Content-Security-Policy "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Cache-Control "no-store"
+		-Server
+	}
+
+	# Registration form posts are tiny; anything larger is abuse.
+	request_body {
+		max_size 16KB
+	}
+
+	# Only the routes the app actually implements.
+	@allowed path / /index.html /register /health/ready /assets/*
+
+	handle @allowed {
+		reverse_proxy registration:8080 {
+			# Caddy is the only trusted proxy. Drop client-supplied forwarding
+			# headers so nobody can spoof X-Forwarded-For (the app derives its
+			# rate-limit key from it) and replace them with the verified peer.
+			# REG_TRUSTED_PROXY_IPS contains Caddy's fixed internal address.
+			header_up -X-Forwarded-For
+			header_up -X-Real-IP
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+
+			flush_interval -1
+
+			transport http {
+				dial_timeout 5s
+				read_timeout 10s
+				write_timeout 10s
+			}
+		}
+	}
+
+	# Everything else does not exist; answer locally, never hit the app.
+	handle {
+		respond "Not found" 404
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}
+
+# Caddy v2 redirects HTTP -> HTTPS automatically; this block makes it explicit
+# and keeps the redirect independent of the ACME challenge flow.
+http://[REG_PUBLIC_HOST] {
+	redir https://[REG_PUBLIC_HOST]{uri} 308
+}

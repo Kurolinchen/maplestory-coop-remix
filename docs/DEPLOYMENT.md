@@ -58,7 +58,8 @@ account-scoped state before commit and restores the previous server state.
 For local playtest GM access, stop only the `maplestory` service while leaving `db` running,
 then use `ops/set-dev-gm.sh <character-name>` and restart with `ops/start.sh`. The helper
 refuses any other Compose project, service, data volume, online account or running
-gameserver. It is a local operational data change, not a migration.
+gameserver. It is a local operational data change, not a migration. The VPS counterpart is
+`ops/set-vps-dev-gm.sh <character-name> <0..6> --i-understand` (see below).
 
 ### Secret rotation (dev DB password)
 
@@ -85,6 +86,121 @@ Hygiene rules:
 - Production has no config here yet (templates only); rotation touches the local
   `maple-coop-dev` compose project exclusively.
 
+## Registration web app (public, isolated)
+
+> **Integrated into the DEV VPS workflow (owner-approved 2026-09-02).** The public
+> registration and the Caddy edge are deployed by `ops/deploy-dev.sh` alongside the game
+> stack. Production remains unconfigured; publishing there stays a separate human decision.
+
+Account registration runs as its **own JVM process and its own container**, never inside the
+game server JVM (`docs/DECISIONS.md` D13). The game JVM opens no HTTP port at all.
+
+- Code: `src/main/java/coop/registration/` (`RegistrationServerMain` is a
+  `com.sun.net.httpserver` process, not the Netty game server)
+- Static assets: `src/main/resources/coop/registration/public` (`index.html`,
+  `assets/register.css`)
+- Image: `Dockerfile.registration` — `eclipse-temurin:21-jre-jammy`, non-root user
+  `registration` (uid/gid 10001), no packages added, no WZ, no scripts, no game config;
+  built reproducibly from `pom.xml` and `src/` in its own Maven build stage
+- Entrypoint: `java -cp /opt/registration/app.jar coop.registration.RegistrationServerMain`
+  (the build stage supplies `app.jar`)
+- Routes: `GET /` (`index.html`), `GET/POST /register`, `GET /health/ready`; everything else
+  is 404. `Host` must equal the host of `REG_PUBLIC_ORIGIN`, otherwise 403.
+- Database: MySQL only over the internal compose network, as a **least-privilege user** that
+  may `INSERT` into `accounts` and nothing else. The game DB root credential is never given to
+  this service.
+
+Environment comes from a gitignored file rendered from `ops/registration.env.example` (see
+`ops/registration.env.example` for every key). Secrets are **file paths**, never arguments:
+
+| Variable | Meaning |
+| --- | --- |
+| `REG_PUBLIC_ORIGIN` | public origin, e.g. `https://dream-ms.duckdns.org`; mismatching `Host`/`Origin` is answered with 403 |
+| `REG_JDBC_URL` | JDBC URL with the compose service name as host (`db`), never a host port |
+| `REG_DB_USER` | least-privilege registration DB user |
+| `REG_DB_PASSWORD_FILE` | path to the password file (e.g. `/run/secrets/reg_db_password`) |
+| `REG_INVITE_FILE` | path to the invite-passphrase file (e.g. `/run/secrets/reg_invite_passphrase`) |
+| `REG_PORT` | internal listen port, default `8080` |
+| `REG_PER_IP_BURST` | attempts per client IP per 15 min window (default 2) |
+| `REG_GLOBAL_HOURLY_CAP` | global cap per one-hour window (default 20) |
+| `REG_TRUSTED_PROXY_IPS` | comma-separated exact internal proxy IPs allowed to supply `X-Forwarded-For`; empty trusts none |
+| `REG_RESOURCE_DIR` | static assets directory, default `/opt/registration/public` |
+
+Secret files belong on the VPS only, `chmod 600`, owned by the service uid — never in the
+image, never in git, never in a compose file. Rotating the invite passphrase is a file
+replacement plus container restart; it invalidates every outstanding invite.
+
+### Least-privilege DB user (provisioning, not a migration)
+
+The registration service never receives the game DB root credential. Provision its user once
+per environment on the database host — `CREATE USER`/`GRANT` deliberately live in ops
+provisioning, not in a Liquibase changeset (`docs/DECISIONS.md` D14):
+
+```sql
+CREATE USER 'registration'@'172.30.251.3' IDENTIFIED BY '<generated password>';
+GRANT INSERT ON cosmic.accounts TO 'registration'@'172.30.251.3';
+FLUSH PRIVILEGES;
+```
+
+The host part is exact on purpose: the registration container has the fixed internal address
+`172.30.251.3` on the internal `maple-dev-registration-db-net`. `ops/deploy-dev.sh` provisions
+this user idempotently from the secret file (password fed over stdin, never argv/stdout) and
+verifies the grants afterwards.
+
+`accounts` alone is enough: character slots, `loggedin`, `banned` and `tos` come from the
+column defaults (`db/extensions/coop-1001` raises the slot default). Store the generated
+password only in the file referenced by `REG_DB_PASSWORD_FILE`. Until that user exists the app
+fails closed with `503` on `/health/ready`.
+
+### Reverse proxy (Caddy)
+
+`ops/Caddyfile.vps` is the checked-in template for `https://dream-ms.duckdns.org`:
+
+- automatic HTTPS (Let's Encrypt) plus explicit `http://` → `https://` redirect
+- host ports **80/tcp** and **443/tcp** are the only registration-related host ports
+- security headers (CSP `default-src 'none'`, `nosniff`, `no-referrer`), 16 KB request body
+  limit, short proxy timeouts
+- client-supplied `X-Forwarded-For` / `X-Real-IP` are dropped and replaced; the app accepts the
+  replacement only when the immediate peer is an exact IP in `REG_TRUSTED_PROXY_IPS`
+- HSTS is intentionally **not** set yet
+
+The integration is in `ops/bootstrap-vps.sh` (generated DEV compose) and `ops/deploy-dev.sh`
+(rendering + deploy). The topology (D17 in `docs/DECISIONS.md`):
+
+| Network | Subnet | Members |
+| --- | --- | --- |
+| `maple-dev-net` | dynamic (existing) | db, maplestory |
+| `maple-dev-web-net` | `172.30.250.0/24` | caddy `172.30.250.2`, registration `172.30.250.3` |
+| `maple-dev-registration-db-net` | `172.30.251.0/29`, `internal: true` | db `172.30.251.2`, registration `172.30.251.3` |
+
+- Caddy publishes only host ports **80/tcp** and **443/tcp**; registration and MySQL publish
+  nothing (`REG_TRUSTED_PROXY_IPS=172.30.250.2`).
+- `ops/Caddyfile.vps` is the reviewed template; rendered Caddyfiles are generated artifacts
+  and are not committed.
+- Secrets live in `/opt/maple-dev/secrets/` (`reg_db_password`, `reg_invite_passphrase`),
+  created once by `ops/provision-vps-registration.sh` (generated on the VPS, never printed,
+  `0400`, uid/gid `10001`). Re-running it is a no-op and never rotates.
+
+### Deploy / verify / rotate
+
+```
+ops/bootstrap-vps.sh --i-understand          # once per VPS: docker, dirs, nets, compose, ufw
+ops/provision-vps-registration.sh --i-understand  # once: create missing secret files
+ops/deploy-dev.sh --i-understand             # build game+registration, db user, health, HTTPS
+ops/verify-vps.sh                            # read-only checks incl. grants and headers
+```
+
+`deploy-dev.sh` is phase-isolated: it starts db/game first, then provisions the DB user, then
+starts registration and only after its healthcheck renders/validates and starts Caddy. A web
+failure therefore never touches a running game server. Web rollback is independent:
+`docker compose ... stop caddy registration` removes the public surface; secrets and the
+Caddy data volume (certificates) stay for analysis.
+
+Rotating the invite passphrase: replace `/opt/maple-dev/secrets/reg_invite_passphrase`
+(new content, `chown 10001:10001`, `chmod 400`) and restart the registration container.
+Rotating the DB password: change the secret file **and** run `ops/deploy-dev.sh` (it re-applies
+`ALTER USER` from the file) — doing only one side breaks the service.
+
 ## Upstream sync
 
 ```
@@ -103,28 +219,45 @@ server, DB). No LLM API keys, no OpenCode.
 
 ```
 /opt/maple-dev/app       # checked-out dev source
-/opt/maple-dev/config    # generated Compose, rendered config and chmod-600 secret
+/opt/maple-dev/config    # generated Compose, rendered config, registration.env, Caddyfile
+/opt/maple-dev/secrets   # registration secret files (0400, uid/gid 10001), mounted read-only
 /opt/maple-prod/app      # reserved; production remains unconfigured
 /opt/maple-prod/config   # reserved; production remains unconfigured
 ```
 
 Dev and prod are fully isolated (separate dirs, projects, volumes, networks, config, secrets).
-DEV uses Compose project `maple-dev`, volume `maple-dev-db` and network
-`maple-dev-net`. MySQL has no host port. UFW permits only SSH, login `8484/tcp`
-and channels `7575:7577/tcp` inbound.
+DEV uses Compose project `maple-dev`, volume `maple-dev-db` and networks `maple-dev-net`,
+`maple-dev-web-net` and `maple-dev-registration-db-net` (see the registration section above).
+MySQL and registration have no host port. UFW permits SSH, the game login/channel ports
+(`8484/tcp`, `7575:7577/tcp`) and the public TLS edge (`80/tcp`, `443/tcp`).
 
 The dev VPS workflow is active. Production remains unconfigured and human-only.
-Remote scripts refuse to run until `VPS_HOST` is configured in gitignored
-`ops/vps.env`; bootstrap/deploy additionally require explicit approval and
+Remote scripts refuse to run until `VPS_HOST` (and `VPS_REG_PUBLIC_ORIGIN`) are configured in
+gitignored `ops/vps.env`; bootstrap/deploy/provision additionally require explicit approval and
 `--i-understand`.
 
 ```
-ops/bootstrap-vps.sh   # install docker, create isolated dirs/networks (idempotent)
-ops/verify-vps.sh      # health/readiness checks
-ops/deploy-dev.sh      # build + deploy DEV only (prod stays human-only, later)
-ops/dev-status.sh      # remote dev status
-ops/dev-logs.sh        # remote dev logs
+ops/bootstrap-vps.sh --i-understand          # install docker, dirs, networks, compose, ufw
+ops/provision-vps-registration.sh --i-understand
+                                             # create missing registration secret files
+ops/verify-vps.sh                            # health/readiness/security checks (read-only)
+ops/deploy-dev.sh --i-understand             # build + deploy DEV only (prod stays human-only)
+ops/dev-status.sh                            # remote dev status (incl. registration health)
+ops/dev-logs.sh server|db|registration|caddy # remote dev logs
+ops/set-vps-dev-gm.sh <character-name> <0..6> --i-understand
+                        # guarded remote GM promotion (DEV only, offline character)
 ```
 
+`ops/set-vps-dev-gm.sh` mirrors `ops/set-dev-gm.sh` remotely: it requires `VPS_HOST`, works
+only in `/opt/maple-dev`, verifies the Compose project (`maple-dev`) and data volume
+(`maple-dev-db`), refuses while the dev gameserver is running, requires the account to be
+offline (`loggedin = 0`) and unbanned (`banned = 0`), matches the character with
+`BINARY c.name = '...'`, requires exactly one row and updates only `characters.gm` for that
+id inside a transaction (`ROW_COUNT`, final value and login state are verified before
+commit). It never prints the DB password and refuses to run under `set -x`. The dev
+gameserver must be stopped first so no in-memory save can overwrite the change.
+
 Rules: dev deployment needs explicit human approval; **production deployment always needs
-explicit human approval**; SSH access only through these scripts once configured.
+explicit human approval**; SSH access only through these scripts once configured. **No script
+deploys automatically** — bootstrap, deploy and every GM/secret change are owner-approved
+one-shot commands.

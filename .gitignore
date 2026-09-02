@@ -31,6 +31,8 @@ database/docker-pg-db-data
 .env
 ops/.env
 ops/vps.env
+ops/registration.env
+docs/handbook/build/
 ops/config/
 ops/backups/
 

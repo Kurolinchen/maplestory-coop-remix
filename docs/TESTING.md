@@ -63,6 +63,53 @@ Starts DB + server, waits ≤180 s for the log line `Cosmic is now online`
 (`net/server/Server.java:942`), verifies login port 8484 listens, then stops everything.
 Run it after changes that touch startup, DB migrations, config loading, WZ loading, scripts.
 
+## Registration web app (separate process)
+
+`src/main/java/coop/registration` has no Netty/handler dependency and is covered by plain
+JUnit tests (`src/test/java/coop/registration/`): `RegistrationValidatorTest`,
+`RegistrationHandlerTest` (CSRF, session, origin/host checks, invite),
+`RegistrationRateLimiterTest`, `RegistrationServerSecurityTest` (bounded body and trusted proxy),
+`BcryptCompatibilityTest` (hashes must verify with the game server's `tools.BCrypt`) and
+`FormCodecTest`. They run with everything else:
+
+```
+ops/test.sh                                   # or: sh ./mvnw -B test -Dtest=RegistrationHandlerTest
+```
+
+Manual checks against a running container (no DB root credential needed). The port is
+published for this local check only — behind Caddy nothing publishes it (see
+`docs/DEPLOYMENT.md`). Every request except `/health/ready` is denied with 403 unless the
+`Host` header matches `REG_PUBLIC_ORIGIN`, so pass it explicitly:
+
+```bash
+docker build -f Dockerfile.registration -t maple-registration .
+# env comes from a gitignored copy of ops/registration.env.example,
+# secret files are mounted read-only and referenced by path
+docker run --rm --network <internal-net> -p 8080:8080 \
+  --env-file /path/to/registration.env \
+  -v /path/to/secrets:/run/secrets:ro maple-registration
+
+HOST_HDR='Host: dream-ms.duckdns.org'
+curl -si http://127.0.0.1:8080/health/ready              # 200 "ready" while the DB is reachable, 503 otherwise
+curl -si -H "$HOST_HDR" -c /tmp/cookies http://127.0.0.1:8080/register
+                                                         # 200 + HTML with a fresh CSRF token + session cookie
+curl -si -H "$HOST_HDR" -b /tmp/cookies -X POST http://127.0.0.1:8080/register \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'csrf=<token from the GET>&invite=…&username=TestUser&password=…&confirmation=…'
+```
+
+Negative cases to verify by hand: wrong `Host`/`Origin` → `403`; missing/stale CSRF or session
+cookie → `429`; body over 16 KiB → `413`; wrong invite passphrase → reusable form with a fresh
+cookie/token pair; duplicate username → form with error; rate limit exceeded → `429`. Full checklist:
+`docs/features/security-registration-and-public-handbook.md`.
+
+`ops/build.sh` (full build incl. tests + fat jar) and `ops/smoke-test.sh` stay **mandatory**
+for every change that touches the game server, migrations or config — the registration tests
+are an addition, never a replacement. `ops/smoke-test.sh` additionally asserts the security
+migration state: no active seeded credentials, no seeded GM characters, the
+reserved admin tombstone is safe, the exact enforced `chk_characters_gm_level`
+constraint exists and no `characters.gm` row is outside `0..6`.
+
 ## Local client verification
 
 The proprietary client stays below `.local/` and is never committed. The launcher performs
@@ -106,6 +153,10 @@ ops/start.sh
 The helper always sets GM level 4, verifies the Compose project/service/volume and never
 prints database credentials. Log in again after it succeeds. Then follow the full checklist
 in `docs/features/0.1-coop-qol.md`.
+
+On the VPS DEV instance the same promotion is done with
+`ops/set-vps-dev-gm.sh <character-name> <0..6> --i-understand` (gameserver stopped, DB
+running, account offline and unbanned).
 
 For a fresh non-GM playtest while retaining tester accounts and slot capacity:
 

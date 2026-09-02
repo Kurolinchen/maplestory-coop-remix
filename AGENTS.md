@@ -81,6 +81,10 @@ ops/backup-dev-db.sh    # dump dev DB to ops/backups/
 ops/restore-dev-db.sh   # restore a dump (asks for confirmation)
 ops/reset-dev-db.sh     # DESTRUCTIVE: wipe dev DB volume (double confirmation)
 ops/rotate-dev-db-pass.sh # rotate dev DB root password (see docs/DEPLOYMENT.md)
+ops/bootstrap-vps.sh --i-understand          # VPS: docker, dirs, networks, compose, ufw
+ops/provision-vps-registration.sh --i-understand # VPS: create missing registration secrets
+ops/deploy-dev.sh --i-understand             # VPS: build + deploy DEV (owner approval)
+ops/verify-vps.sh       # VPS: read-only health/security checks
 ```
 
 ## Game design north star (short form)

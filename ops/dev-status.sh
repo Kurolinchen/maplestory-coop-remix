@@ -10,6 +10,13 @@ set -euo pipefail
 cd /opt/maple-dev/app
 echo "== git =="; git log --oneline -3 2>/dev/null || true
 echo "== compose =="; docker compose -f ../config/docker-compose.yml --env-file ../config/.env ps 2>/dev/null || true
+echo "== registration =="
+registration_id="$(docker compose -f ../config/docker-compose.yml --env-file ../config/.env ps -q registration 2>/dev/null || true)"
+if [[ -n "$registration_id" ]]; then
+  printf 'health=%s\n' "$(docker inspect -f '{{.State.Health.Status}}' "$registration_id" 2>/dev/null || echo unknown)"
+else
+  echo "not deployed"
+fi
 echo "== db volume =="; docker volume ls --filter name=maple-dev || true
 echo "== migrations =="
 docker compose -f ../config/docker-compose.yml --env-file ../config/.env exec -T db sh -c \

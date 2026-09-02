@@ -23,9 +23,30 @@ fi
 
 # 2. Isolated layouts for dev and prod
 for env in dev prod; do
-  mkdir -p "/opt/maple-$env/app" "/opt/maple-$env/config"
+  mkdir -p "/opt/maple-$env/app" "/opt/maple-$env/config" "/opt/maple-$env/secrets"
+  chmod 700 "/opt/maple-$env/secrets"
   docker network inspect "maple-$env-net" >/dev/null 2>&1 || docker network create "maple-$env-net"
 done
+
+ensure_network() {
+  local name="$1" subnet="$2" internal="$3" actual_subnet actual_internal
+  if docker network inspect "$name" >/dev/null 2>&1; then
+    actual_subnet="$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$name")"
+    actual_internal="$(docker network inspect -f '{{.Internal}}' "$name")"
+    [[ "$actual_subnet" == "$subnet" && "$actual_internal" == "$internal" ]] || {
+      printf 'Network %s exists with unexpected configuration; refusing.\n' "$name" >&2
+      exit 1
+    }
+    return
+  fi
+  if [[ "$internal" == true ]]; then
+    docker network create --internal --subnet "$subnet" "$name" >/dev/null
+  else
+    docker network create --subnet "$subnet" "$name" >/dev/null
+  fi
+}
+ensure_network maple-dev-web-net 172.30.250.0/24 false
+ensure_network maple-dev-registration-db-net 172.30.251.0/29 true
 
 # 3. Non-root service user (optional hardening)
 id maple >/dev/null 2>&1 || useradd --system --home /opt/maple-dev maple
@@ -38,7 +59,7 @@ if [[ ! -f /opt/maple-dev/config/.env ]]; then
 fi
 chmod 600 /opt/maple-dev/config/.env
 
-cat > /opt/maple-dev/config/docker-compose.yml <<'COMPOSE'
+cat > /opt/maple-dev/config/docker-compose.yml.tmp <<'COMPOSE'
 name: maple-dev
 services:
   db:
@@ -49,7 +70,9 @@ services:
     volumes:
       - maple-dev-db:/var/lib/mysql
     networks:
-      - maple-dev-net
+      maple-dev-net: {}
+      maple-dev-registration-db-net:
+        ipv4_address: 172.30.251.2
     healthcheck:
       test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
@@ -76,26 +99,95 @@ services:
     networks:
       - maple-dev-net
 
+  registration:
+    build:
+      context: ../app
+      dockerfile: Dockerfile.registration
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./registration.env
+    volumes:
+      - ../secrets/reg_db_password:/run/secrets/reg_db_password:ro
+      - ../secrets/reg_invite_passphrase:/run/secrets/reg_invite_passphrase:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      maple-dev-web-net:
+        ipv4_address: 172.30.250.3
+      maple-dev-registration-db-net:
+        ipv4_address: 172.30.251.3
+
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    depends_on:
+      registration:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - maple-dev-caddy-data:/data
+      - maple-dev-caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      maple-dev-web-net:
+        ipv4_address: 172.30.250.2
+
 volumes:
   maple-dev-db:
     name: maple-dev-db
+  maple-dev-caddy-data:
+    name: maple-dev-caddy-data
+  maple-dev-caddy-config:
+    name: maple-dev-caddy-config
 
 networks:
   maple-dev-net:
     name: maple-dev-net
     external: true
+  maple-dev-web-net:
+    name: maple-dev-web-net
+    external: true
+  maple-dev-registration-db-net:
+    name: maple-dev-registration-db-net
+    external: true
 COMPOSE
+mv /opt/maple-dev/config/docker-compose.yml.tmp /opt/maple-dev/config/docker-compose.yml
 
-# 5. Host firewall: SSH plus MapleStory login/channel ports only.
+# 5. Host firewall: SSH, MapleStory and the Caddy TLS edge only.
 if ! command -v ufw >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y ufw
+fi
+if ! command -v curl >/dev/null 2>&1; then
+  apt-get update -y
+  apt-get install -y curl
 fi
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow OpenSSH >/dev/null
 ufw allow 8484/tcp >/dev/null
 ufw allow 7575:7577/tcp >/dev/null
+ufw allow 80/tcp >/dev/null
+ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 printf '%s\n' "VPS bootstrap finished."
