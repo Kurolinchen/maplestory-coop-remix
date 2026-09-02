@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>MapleStory Co-op Remix — Handbuch</title>
+    <link rel="stylesheet" href="handbook.css">
+</head>
+<body>
+
+<!-- COVER -->
+
+<section class="cover">
+    <span class="kicker">Spieler- und Betreiberhandbuch</span>
+    <h1>MapleStory<br>Co-op Remix</h1>
+    <h2>v83-Server für eine kleine Gruppe — privat betrieben</h2>
+
+    <div class="abstract">
+        Dieses Handbuch beschreibt den vollständigen Weg vom Account bis zum laufenden Server:
+        Registrierung, Clientbetrieb unter Windows und Linux, lokaler Betrieb, VPS-Betrieb,
+        Datensicherung, GM-Einrichtung, die Testprotokolle für die Stufen 1–30 inklusive
+        Companion-Tests und schließlich alle <strong>184 registrierten Befehle</strong> von
+        Member bis Admin.
+    </div>
+
+    <dl>
+        <dt>Servername</dt>
+        <dd>[SERVERNAME]</dd>
+        <dt>Registrierung</dt>
+        <dd>[REGISTRATION-URL]</dd>
+        <dt>Server-Endpoint</dt>
+        <dd>[SERVER-IP]</dd>
+        <dt>Client-Download</dt>
+        <dd>privat über [BETREIBER-KONTAKT]</dd>
+        <dt>Ansprechpartner</dt>
+        <dd>[BETREIBER-KONTAKT]</dd>
+        <dt>Stand</dt>
+        <dd>[DATUM]</dd>
+    </dl>
+
+    <p class="footnote">
+        Der Spielclient enthält proprietäre Dateien von Nexon. Dieses Projekt erteilt keine
+        Weitergaberechte; Clientdateien gehören nicht in öffentliche Repositories,
+        Cloud-Freigaben oder Paketquellen.
+    </p>
+</section>
+
+<main>
+
+    <!-- TOC -->
+
+    <section class="toc">
+        <h2 class="chapter"><span class="num">–</span>Inhaltsverzeichnis</h2>
+        <ol>
+            <li>Sicherheit und Rechtliches</li>
+            <li>Schnellstart für Spieler</li>
+            <li>Account und erster Login</li>
+            <li>Client: Vorbereitung und Pakete</li>
+            <li>Client unter Windows</li>
+            <li>Client unter Linux</li>
+            <li>Lokaler Serverbetrieb</li>
+            <li>VPS-Betrieb (DEV)</li>
+            <li>Datensicherung, Wiederherstellung, Löschungen</li>
+            <li>GM-Rechte und Administration</li>
+            <li>Befehlssystem: Ränge und Regeln</li>
+            <li>Testprotokoll Stufen 1–30</li>
+            <li>Klassen- und Munitionstests</li>
+            <li>Companion-Testprotokoll</li>
+            <li>Solo-Kerning-PQ</li>
+            <li>Telemetrie und Datenprüfungen</li>
+            <li>Fehlerdiagnose</li>
+            <li>Befehlsreferenz (184 Befehle)</li>
+        </ol>
+        <div class="callout info">
+            <span class="title">Konventionen in diesem Handbuch</span>
+            <p>
+                <span class="tag">VERIFIZIERT</span> bedeutet praktisch getestet oder durch Code belegt.
+                <span class="tag">UNGETESTET</span> bedeutet geplant, aber noch nicht praktisch abgenommen.
+                <span class="tag">PLATZHALTER</span> markiert Werte, die der Betreiber vor Weitergabe ersetzt.
+            </p>
+        </div>
+    </section>
+
+    <!-- 1 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">01</span>Sicherheit und Rechtliches</h2>
+
+        <div class="callout danger">
+            <span class="title">Proprietärer Client — nicht öffentlich verteilen</span>
+            <p>
+                Spielclient, Installer und WZ-Dateien sind urheberrechtlich geschützte Dateien von Nexon.
+                Dieses Projekt erteilt keine Rechte zu ihrer Weitergabe. Spieler müssen eine rechtmäßig
+                nutzbare Kopie unabhängig vom Serverprojekt beziehen. Dieses Handbuch stellt keine
+                Rechtsberatung dar; öffentliche Download-Links, Spiegel, Paketquellen, Container-Images
+                und Commits solcher Dateien gehören nicht zu diesem Projekt.
+            </p>
+        </div>
+
+        <div class="callout danger">
+            <span class="title">Geheime Werte niemals teilen</span>
+            <ul>
+                <li>Datenbankpasswörter, SSH-Schlüssel, API-Tokens, DDNS-Tokens</li>
+                <li>Einladungscodes für die Registrierung</li>
+                <li>Vollständige Konfigurationsdateien mit injizierten Passwörtern</li>
+                <li>Datenbank-Backups (sie enthalten Account- und Spielerdaten)</li>
+            </ul>
+            <p class="small">
+                Ein versehentlich veröffentlichter Token oder ein Passwort gilt sofort als kompromittiert
+                und muss rotiert werden. Wiederherstellen durch Löschen ist nicht möglich.
+            </p>
+        </div>
+
+        <h3>Netzwerk und Angriffsfläche</h3>
+        <p>
+            Der Server veröffentlicht technisch bedingt den Login-Port <code>8484</code> und die
+            Channel-Ports <code>7575</code>–<code>7577</code>. Die Datenbank ist nicht nach außen
+            erreichbar. Jeder Spieler mit Netzwerkzugang kann versuchen, sich anzumelden.
+        </p>
+        <div class="callout warn">
+            <span class="title">Automatische Kontoregistrierung</span>
+            <p>
+                Die v83-Funktion <code>AUTOMATIC_REGISTER</code> legt beim Login mit unbekanntem Namen
+                sofort ein Konto an. Solange sie aktiv ist, lassen sich Konten auch ohne
+                Registrierungsseite erzeugen. Für einen Server, der nur einer bekannten Gruppe offen
+                stehen soll, ist das ein bewusst einzugehendes Risiko. Empfehlung: Registrierungsseite
+                mit Einladungscode nutzen und die automatische Registrierung nach der
+                Einladungsphase abschalten.
+            </p>
+        </div>
+
+        <h3>Was dieses Handbuch absichtlich nicht enthält</h3>
+        <ul>
+            <li>Externe IP-Adressen, Hostnamen oder SSH-Ziele — hier: <code>[SERVER-IP]</code></li>
+            <li>Passwörter, Tokens oder Einladungscodes</li>
+            <li>Anleitungen zum Beschaffen eines Clients aus fragwürdigen Quellen</li>
+            <li>Anleitungen zum Umgehen von Antivirensoftware pauschal zu vertrauen</li>
+        </ul>
+    </section>
+
+    <!-- 2 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">02</span>Schnellstart für Spieler</h2>
+
+        <div class="grid">
+            <div class="card">
+                <h4>1 — Account (aktueller DEV-Stand)</h4>
+                <ol class="steps">
+                    <li>Vom Betreiber Zugang zum privaten Testserver erhalten.</li>
+                    <li>Im Client einen unbekannten Accountnamen und ein Passwort eingeben.</li>
+                    <li>Solange <code>AUTOMATIC_REGISTER</code> aktiv ist, wird das Konto beim ersten Login angelegt.</li>
+                    <li>Alternativ: Auf <code>[REGISTRATION-URL]</code> mit Einladungscode vom Betreiber registrieren.</li>
+                </ol>
+            </div>
+            <div class="card">
+                <h4>2 — Client</h4>
+                <ol class="steps">
+                    <li>Clientpaket privat vom Betreiber erhalten.</li>
+                    <li>Prüfsummen gegen das mitgelieferte Manifest vergleichen.</li>
+                    <li>Unter Windows: EXE direkt starten.</li>
+                    <li>Unter Linux: nur die getestete Bottles-/Soda-Kombination nutzen.</li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>Erste Minuten im Spiel</h3>
+        <ol class="steps">
+            <li>Mit Accountname und Passwort anmelden.</li>
+            <li>Lizenzvereinbarung im Client bestätigen.</li>
+            <li>PIN und PIC setzen — diese werden im Client abgefragt und gehören nicht zur Webregistrierung.</li>
+            <li>Charakter erstellen; 15 Charakterplätze stehen zur Verfügung.</li>
+            <li>Klasse wählen: Explorer, Cygnus Knights oder Aran.</li>
+            <li>Ab Stufe 1 stehen drei Anfänger-Skillpunkte bereit.</li>
+        </ol>
+
+        <div class="callout info">
+            <span class="title">Nützliche Spielerbefehle</span>
+            <p>
+                <code>@help</code> Übersicht · <code>@training</code> passende Trainingsorte ·
+                <code>@rates</code> eigene Raten · <code>@online</code> wer ist da ·
+                <code>@gm &lt;Text&gt;</code> Hilfe rufen ·
+                <code>@companion status</code> Begleiterstatus ·
+                <code>@dispose</code> hängende NPC-Dialoge lösen.
+            </p>
+        </div>
+    </section>
+
+    <!-- 3 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">03</span>Account und erster Login</h2>
+
+        <h3>Registrierungsseite</h3>
+        <div class="callout info">
+            <span class="title">Öffentliche Registrierung hinter HTTPS</span>
+            <p>
+                Die Registrierung läuft als isolierter Dienst hinter <code>[REGISTRATION-URL]</code>
+                (nur HTTPS). Sie benötigt den Einladungscode vom Betreiber und ist durch
+                CSRF-Schutz, Session-Cookies und Rate-Limits abgesichert. Die
+                Kontoerstellung im Client über <code>AUTOMATIC_REGISTER</code> bleibt
+                daneben zusätzlich aktiv.
+            </p>
+        </div>
+        <ul>
+            <li>Öffentliche Seite: [REGISTRATION-URL] (nur HTTPS; HTTP leitet automatisch weiter)</li>
+            <li>Einladungscode ist erforderlich; er wird vom Betreiber vergeben.</li>
+            <li>Es werden keine E-Mail-Adresse, kein Geburtsdatum und keine Analyse-Daten erhoben.</li>
+            <li>Passwörter werden als bcrypt-Hash mit Kostenfaktor 12 gespeichert.</li>
+            <li>Bei doppelten Namen erfolgt eine neutrale Meldung; es findet keine Namensabfrage statt.</li>
+        </ul>
+
+        <h3>Was die Webseite nicht übernimmt</h3>
+        <div class="callout info">
+            <span class="title">PIN und PIC bleiben Clientsache</span>
+            <p>
+                PIN und PIC werden beim ersten Login im Client gesetzt. Wer sie vergisst, benötigt den
+                Betreiber; es gibt absichtlich keine Selbstzurücksetzung über die Webseite, weil dafür
+                keine Identitätsprüfung existiert.
+            </p>
+        </div>
+
+        <h3>Client-Login prüfen</h3>
+        <ol class="steps">
+            <li>Client starten; es muss die eigene Endpunktadresse [SERVER-IP] eingetragen sein.</li>
+            <li>Anmelden. Bei „Login fehlt“ zuerst die Servererreichbarkeit prüfen (siehe Kapitel 17).</li>
+            <li>Nach dem Login PIN setzen, dann PIC, dann Charakter erstellen.</li>
+        </ol>
+    </section>
+
+    <!-- 4 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">04</span>Client: Vorbereitung und Pakete</h2>
+
+        <div class="callout danger">
+            <span class="title">Rechtliche Vorbedingung</span>
+            <p>
+                Grundlage ist eine vorhandene, rechtmäßig erworbene MapleStory-v83-Installation.
+                Der Umbau entfernt Kopierschutz- und Launcher-Bestandteile
+                (<span class="kbd">HShield/</span>, <span class="kbd">ASPLnchr.exe</span>,
+                <span class="kbd">MapleStory.exe</span>, <span class="kbd">Patcher.exe</span>) und
+                ersetzt Spiel- und Daten-Dateien. Das Ergebnis ist ausschließlich für den privaten
+                Betrieb auf diesem Server bestimmt.
+            </p>
+        </div>
+
+        <h3>Aufbau eines Clientpakets</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:32%">Bestandteil</th>
+                <th>Beschreibung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Client-EXE</td>
+                <td>Für den Zielserver gepatchte Startdatei; enthält die Endpunktadresse.</td>
+            </tr>
+            <tr>
+                <td>WZ-Daten</td>
+                <td>Spiel- und Zeichenfolgedaten des angepassten Clients.</td>
+            </tr>
+            <tr>
+                <td>Manifest</td>
+                <td><span class="kbd">CLIENT_MANIFEST.json</span> mit Name, Größe und SHA-256 je Datei.</td>
+            </tr>
+            <tr>
+                <td>Startskript</td>
+                <td>Optionaler Launcher, der Hashes prüft und den Port testet.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3>Paket für einen Endpunkt erzeugen</h3>
+        <p>Betreiber erzeugt je Ziel ein eigenes Paket:</p>
+        <pre><code>python3 tools/client/patch-client-ip.py --self-test
+tools/client/build-client-profile.sh vps-dev
+python3 tools/client/verify-client.py \
+  .local/client-builds/vps-dev/MapleStory --profile vps-dev</code></pre>
+        <ul>
+            <li>Der Patcher akzeptiert ausschließlich kanonische IPv4-Adressen.</li>
+            <li>DNS-Namen und IPv6 werden nicht unterstützt; bei wechselnder IP muss neu gepatcht werden.</li>
+            <li>Der Patcher arbeitet nie in-place und überschreibt kein bestehendes Ausgabeverzeichnis.</li>
+            <li>Das Manifest schützt gegen versehentliche Änderungen, ersetzt aber keine Vertrauensprüfung.</li>
+        </ul>
+
+        <div class="callout warn">
+            <span class="title">Übergabe</span>
+            <p>
+                Übergabe nur direkt an bekannte Mitspieler, zum Beispiel über einen privaten,
+                passwortgeschützten Transfer mit anschließendem Hash-Vergleich. Das Manifest sollte
+                dabei separat übermittelt werden, damit Paket und Prüfsummen nicht gemeinsam
+                austauschbar sind.
+            </p>
+        </div>
+    </section>
+
+    <!-- 5 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">05</span>Client unter Windows</h2>
+
+        <div class="callout warn">
+            <span class="title">UNGETESTET</span>
+            <p>
+                Der Windows-Ablauf ist aus der Client-Dokumentation abgeleitet, aber im Projekt noch
+                nicht mit einer konkreten Windows-Version praktisch abgenommen. Erste Nutzer sollten
+                ihn bewusst als Pilot testen und Rückmeldung geben.
+            </p>
+        </div>
+
+        <ol class="steps">
+            <li>Clientpaket in einen eigenen Ordner entpacken, zum Beispiel <span class="kbd">C:\MapleStory</span>.</li>
+            <li>Prüfen, dass alle Dateien aus dem Manifest vorhanden sind.</li>
+            <li>Hash-Prüfung durchführen, falls Python verfügbar ist:
+                <pre><code>python tools\client\verify-client.py C:\MapleStory --profile vps-dev</code></pre>
+            </li>
+            <li>Die Client-EXE im Ordner starten.</li>
+            <li>Login, Charakterauswahl und Channelwechsel prüfen.</li>
+        </ol>
+
+        <h3>Antivirensoftware</h3>
+        <div class="callout warn">
+            <span class="title">Warnungen ernst nehmen</span>
+            <p>
+                Modifizierte Exe-Dateien werden von Antivirenprogrammen häufig als verdächtig
+                eingestuft. Eine Warnung ist kein Unschuldsbeweis, aber bei vertrauenswürdiger Quelle
+                ein bekanntes Muster.
+            </p>
+            <ul>
+                <li>Keine pauschale Ausnahme für gesamte Download- oder Installationsordner setzen.</li>
+                <li>Wenn überhaupt, dann nur eine Ausnahme für diesen einen Clientordner.</li>
+                <li>Vorher Quelle und Prüfsummen klären; Nutzung erfolgt auf eigenes Risiko.</li>
+            </ul>
+        </div>
+
+        <h3>Typische Fehlerbilder</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:40%">Symptom</th>
+                <th>Prüfung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Login unmöglich</td>
+                <td>Server erreichbar? Port 8484 offen? Richtige Endpunktadresse im Paket?</td>
+            </tr>
+            <tr>
+                <td>Channelwechsel scheitert</td>
+                <td>Channel-Ports 7575–7577 erreichbar; Firewall des Servers prüfen.</td>
+            </tr>
+            <tr>
+                <td>EXE verschwindet</td>
+                <td>Antiviren-Quarantäne prüfen; Ordnerausnahme nur gezielt setzen.</td>
+            </tr>
+            <tr>
+                <td>Hash-Fehler</td>
+                <td>Paket erneut übertragen; nicht mit veränderter Datei starten.</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- 6 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">06</span>Client unter Linux</h2>
+
+        <div class="callout info">
+            <span class="title">VERIFIZIERT</span>
+            <p>
+                End-to-end getestet ist ausschließlich: Pop!_OS, Bottles als Flatpak, Runner
+                <span class="kbd">soda-11.0-6-x86_64</span>, echter 32-Bit-Prefix,
+                lokaler Endpunkt <span class="kbd">127.0.0.1</span>. Alles andere ist ungetestet.
+            </p>
+        </div>
+
+        <h3>Getestete Kombination einrichten</h3>
+        <pre><code>flatpak install flathub com.usebottles.bottles
+mkdir -p .local/client-source/runners \
+         "$HOME/.var/app/com.usebottles.bottles/data/bottles/runners"
+curl --fail --location \
+  --output .local/client-source/runners/soda-11.0-6-x86_64.tar.xz \
+  https://github.com/bottlesdevs/wine/releases/download/soda-11.0-6/soda-11.0-6-x86_64.tar.xz
+printf '%s  %s\n' \
+  b3fbd8054fe47ed21de619ee15f8bda340fd0328743d43d42db4e1c5ad561ed8 \
+  .local/client-source/runners/soda-11.0-6-x86_64.tar.xz | sha256sum --check
+tar -xJf .local/client-source/runners/soda-11.0-6-x86_64.tar.xz \
+  -C "$HOME/.var/app/com.usebottles.bottles/data/bottles/runners"</code></pre>
+
+        <h4>Echten 32-Bit-Prefix erzeugen</h4>
+        <pre><code>mkdir -p .local/wine-prefixes
+PREFIX="$PWD/.local/wine-prefixes/maplestory-soda-11.0-6-win32"
+RUNNER="$HOME/.var/app/com.usebottles.bottles/data/bottles/runners/soda-11.0-6-x86_64/bin/wineboot"
+flatpak run --env=WINEARCH=win32 --env="WINEPREFIX=$PREFIX" \
+  --env="MAPLE_WINEBOOT=$RUNNER" --command=sh com.usebottles.bottles \
+  -c '"$MAPLE_WINEBOOT" -u'
+grep '^#arch=win32$' "$PREFIX/system.reg"
+mkdir -p "$PREFIX/drive_c/Nexon"
+cp -a .local/client-builds/local-dev/MapleStory "$PREFIX/drive_c/Nexon/"</code></pre>
+
+        <h4>Starten</h4>
+        <pre><code>ops/start.sh
+ops/client-status.sh
+ops/client-run-local.sh</code></pre>
+
+        <div class="callout danger">
+            <span class="title">Bekannte Sackgassen nicht erneut versuchen</span>
+            <ul>
+                <li>Soda 11.0-3 mit 64-Bit- oder neuem WoW64-Prefix: verbindet, stürzt dann in <span class="kbd">wow64cpu.dll</span> ab.</li>
+                <li>Ubuntu-Wine 6 mit <span class="kbd">wine32-preloader</span>: Adresskonflikt bei <span class="kbd">0x00320000</span>, Stacküberlauf.</li>
+                <li>Keine zufälligen Winetricks-Abhängigkeiten installieren und keine Clientdateien patchen, um diese Fehler zu verdecken.</li>
+            </ul>
+        </div>
+
+        <div class="callout warn">
+            <span class="title">UNGETESTET</span>
+            <p>
+                Linux gegen einen fernen Endpunkt ist nicht abgedeckt. Der vorhandene Launcher ist
+                fest auf das lokale Profil <span class="kbd">local-dev</span> und
+                <span class="kbd">127.0.0.1</span> ausgelegt. Für ferne Endpunkte existiert kein
+                getesteter Linux-Launcher.
+            </p>
+        </div>
+    </section>
+
+    <!-- 7 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">07</span>Lokaler Serverbetrieb</h2>
+
+        <h3>Voraussetzungen</h3>
+        <ul>
+            <li>Docker mit Compose-Plugin und laufendem Daemon</li>
+            <li>Java 21 über SDKMAN (<code>sdk install java 21.0.12-amzn</code>)</li>
+            <li>Git, Bash, OpenSSL</li>
+        </ul>
+
+        <h3>Routine</h3>
+        <pre><code>ops/build.sh            # komplett bauen inklusive Tests
+ops/start.sh            # Datenbank und Server starten
+ops/start.sh --build    # zusätzlich das Image neu bauen
+ops/stop.sh             # Stack stoppen, Datenvolumen bleibt
+ops/stop-server.sh      # nur den Gameserver stoppen
+ops/restart.sh
+ops/logs.sh server      # auch: db
+ops/status.sh
+ops/smoke-test.sh</code></pre>
+
+        <div class="callout warn">
+            <span class="title">Reihenfolge vor jeder Freigabe</span>
+            <p>
+                Zuerst <code>ops/build.sh</code>, dann <code>ops/smoke-test.sh</code>. Der
+                Docker-Image-Bau überspringt Tests; <code>ops/start.sh --build</code> ersetzt keinen
+                Testlauf. Der Smoke-Test startet den Stack neu und fährt ihn am Ende wieder herunter.
+            </p>
+        </div>
+
+        <h3>Ports und Volumes</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:26%">Ressource</th>
+                <th>Wert</th>
+                <th style="width:34%">Hinweis</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Login</td>
+                <td>8484</td>
+                <td>Für den Client zwingend erreichbar.</td>
+            </tr>
+            <tr>
+                <td>Channel</td>
+                <td>7575–7577</td>
+                <td>World 1, Channel 1–3.</td>
+            </tr>
+            <tr>
+                <td>Datenbank</td>
+                <td>127.0.0.1:3307</td>
+                <td>Nur lokal gebunden, nicht veröffentlichen.</td>
+            </tr>
+            <tr>
+                <td>Volume</td>
+                <td>maple-coop-dev-db</td>
+                <td>Bleibt beim Stoppen erhalten.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="callout warn">
+            <span class="title">Spielports sind nicht automatisch lokal</span>
+            <p>
+                Die Datenbank ist an Loopback gebunden, die Spielports dagegen werden auf allen
+                Host-Schnittstellen veröffentlicht. Wer lokal testet, sollte die Host-Firewall
+                entsprechend konfigurieren.
+            </p>
+        </div>
+    </section>
+
+    <!-- 8 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">08</span>VPS-Betrieb (DEV)</h2>
+
+        <div class="callout danger">
+            <span class="title">Nur dedizierter Host</span>
+            <p>
+                Das Bootstrap-Skript verändert das Gesamtsystem: Paketinstallation, Docker,
+                Systemd-Dienste und eine globale Firewall-Regel mit Standard „eingehend ablehnen“.
+                Auf einem gemeinsam genutzten VPS können dadurch andere Dienste unerreichbar werden.
+                Nicht auf Shared-Hosting oder auf Hosts mit weiteren Diensten anwenden.
+            </p>
+        </div>
+
+        <h3>Ablauf</h3>
+        <pre><code>cp ops/vps.env.example ops/vps.env   # VPS_HOST eintragen (SSH-Alias oder Host)
+ops/verify-vps.sh                    # nur lesende Bereitschaftsprüfung
+ops/bootstrap-vps.sh --i-understand  # nur nach ausdrücklicher Freigabe
+ops/deploy-dev.sh --i-understand     # nur nach ausdrücklicher Freigabe
+ops/dev-status.sh
+ops/dev-logs.sh server</code></pre>
+
+        <h3>Layout</h3>
+        <pre><code>/opt/maple-dev/app      # ausgecheckter Quellstand
+/opt/maple-dev/config   # erzeugte Compose-Datei, Konfiguration, Secret
+/opt/maple-prod/...     # reserviert, Produktion bleibt unkonfiguriert</code></pre>
+        <ul>
+            <li>DEV und PROD sind getrennt: Verzeichnisse, Compose-Projekte, Volumes, Netzwerke, Geheimnisse.</li>
+            <li>Die Datenbank besitzt keinen Host-Port.</li>
+            <li>Die aktuelle Firewall erlaubt nur SSH, 8484 und 7575–7577.</li>
+            <li>Ein Deployment erfordert einen sauberen Worktree und einen gepushten Commit.</li>
+            <li>Ein Produktions-Deployment erfolgt niemals automatisch.</li>
+        </ul>
+
+        <div class="callout warn">
+            <span class="title">Standard-Admin neutralisiert</span>
+            <p>
+                Die Erweiterungsmigration sperrt Konten mit dem öffentlich dokumentierten Seed-Hash,
+                ersetzt deren Passwort, setzt zugehörige Charaktere auf GM-Rang 0 und reserviert den
+                Namen <code>admin</code> als gesperrtes Konto. <code>ops/smoke-test.sh</code> prüft
+                diesen Zustand bei jedem Smoke-Test.
+            </p>
+        </div>
+
+        <div class="callout warn">
+            <span class="title">UNGETESTET</span>
+            <p>
+                Backup, Wiederherstellung, Charakter-Wipe, Passwortrotation und GM-Einrichtung
+                existieren lokal, aber nicht als geprüfte VPS-Verfahren. Ports werden beim Deployment
+                nur auf dem VPS selbst geprüft, nicht von außerhalb.
+            </p>
+        </div>
+    </section>
+
+    <!-- 9 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">09</span>Datensicherung, Wiederherstellung, Löschungen</h2>
+
+        <h3>Sicherung</h3>
+        <pre><code>ops/backup-dev-db.sh</code></pre>
+        <ul>
+            <li>Erzeugt <span class="kbd">ops/backups/cosmic-dev-&lt;Zeitstempel&gt;.sql.gz</span>.</li>
+            <li>Verwendet einen konsistenten Dump; es werden automatisch nur die letzten zehn Dateien behalten.</li>
+            <li>Backups sind nicht verschlüsselt und enthalten Account- und Spielerdaten.</li>
+        </ul>
+
+        <h3>Wiederherstellung</h3>
+        <pre><code>ops/restore-dev-db.sh
+ops/restore-dev-db.sh ops/backups/cosmic-dev-YYYYMMDD-HHMMSS.sql.gz</code></pre>
+        <div class="callout danger">
+            <span class="title">Vorher sichern</span>
+            <p>
+                Das Skript erzeugt kein automatisches Backup vor dem Überschreiben und prüft keine
+                Prüfsumme des Dumps. Vor jeder Wiederherstellung manuell sichern und anschließend mit
+                <code>ops/status.sh</code> und <code>ops/smoke-test.sh</code> prüfen.
+            </p>
+        </div>
+
+        <h3>Nur Charakterdaten löschen</h3>
+        <pre><code>ops/backup-dev-db.sh
+ops/wipe-characters.sh --i-understand</code></pre>
+        <p>Erhalten bleiben: Accounts, Charakter-Slot-Kapazität, Migrationsstatus, Lager und
+            accountgebundene Inventargegenstände. Gelöscht werden unter anderem Charaktere,
+            Companion-Bindungen, Telemetriedaten und gesehene Hinweise.</p>
+
+        <h3>Kompletter Datenbank-Reset</h3>
+        <pre><code>ops/backup-dev-db.sh
+ops/reset-dev-db.sh</code></pre>
+        <div class="callout danger">
+            <span class="title">Doppelte Bestätigung</span>
+            <p>
+                Neben der Rückfrage ist die Eingabe von <code>RESET</code> erforderlich. Danach ist
+                das Datenvolumen entfernt; Accounts, Charaktere und Gegenstände sind verloren. Beim
+                nächsten Start werden Schema und Startdaten neu aufgebaut.
+            </p>
+        </div>
+
+        <h3>Datenbankpasswort rotieren</h3>
+        <pre><code>ops/rotate-dev-db-pass.sh
+ops/smoke-test.sh</code></pre>
+        <p class="small">
+            Nur lokal. Das Skript verweigert die Ausführung unter Shell-Tracing
+            (<code>set -x</code>) und gibt das neue Passwort nicht aus.
+        </p>
+    </section>
+
+    <!-- 10 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">10</span>GM-Rechte und Administration</h2>
+
+        <div class="callout warn">
+            <span class="title">Dokumentation erteilt keine Rechte</span>
+            <p>
+                Die Befehle in Kapitel 18 sind vollständig beschrieben, damit Wirkungen und Gefahren
+                bekannt sind. Wer einen Rang nicht besitzt, darf die zugehörigen Befehle nicht
+                verwenden. Das Ausprobieren an fremden Charakteren gilt als Eingriff.
+            </p>
+        </div>
+
+        <h3>Lokale GM-Einrichtung</h3>
+        <pre><code>ops/stop-server.sh
+ops/set-dev-gm.sh &lt;character-name&gt;
+ops/start.sh</code></pre>
+        <ul>
+            <li>Der Gameserver muss vollständig gestoppt sein, sonst überschreibt ein Speichervorgang die Änderung.</li>
+            <li>Der Account muss offline sein.</li>
+            <li>Der Helfer setzt immer SuperGM (Rang 4) und prüft Compose-Projekt, Volume und Ergebnis.</li>
+            <li>Nach dem Start neu anmelden.</li>
+        </ul>
+
+        <h3>GM-Rang ändern</h3>
+        <p>
+            <code>!setgmlevel &lt;Spieler&gt; &lt;0..6&gt;</code> ändert den Rang eines
+            Online-Spielers im aktuellen Channel. Werte außerhalb 0–6 werden abgelehnt. Höchste
+            Stufe 6 ist dem Betreiber vorbehalten; für Tests genügt Stufe 4.
+        </p>
+
+        <h3>Besondere Vorsicht</h3>
+        <ul>
+            <li>Befehle, die Spieler trennen, einsperren, bannen oder töten, wirken unmittelbar.</li>
+            <li>Befehle, die Gegenstände, Mesos oder Währungen vergeben, verändern dauerhaft Spielstände.</li>
+            <li>Befehle, die Raten oder Konfigurationen ändern, betreffen alle Spieler der World.</li>
+            <li>Entwickler- und Admin-Befehle können den Serverbetrieb stören; sie sind als
+                <span class="badge vps-no">VPS-NO</span> oder <span class="badge ops">OPS</span>
+                markiert.</li>
+        </ul>
+    </section>
+
+    <!-- 11 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">11</span>Befehlssystem: Ränge und Regeln</h2>
+
+        <h3>Ränge und Präfixe</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:10%">Rang</th>
+                <th style="width:20%">Bezeichnung</th>
+                <th style="width:16%">Präfix</th>
+                <th>Bedeutung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>0</td>
+                <td>Member</td>
+                <td><code>@</code></td>
+                <td>Alle Spieler.</td>
+            </tr>
+            <tr>
+                <td>1</td>
+                <td>Donator</td>
+                <td><code>@</code></td>
+                <td>Komfort- und Informationsbefehle.</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td>JrGM</td>
+                <td><code>!</code> (auch <code>@</code>)</td>
+                <td>Erste Eingriffe: Items, Warps, Level.</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td>GM</td>
+                <td><code>!</code></td>
+                <td>Moderation, Spawns, Events, Währungen.</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td>SuperGM</td>
+                <td><code>!</code></td>
+                <td>Raten, Slots, Bosse, persistente NPCs.</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td>Developer</td>
+                <td><code>!</code></td>
+                <td>Diagnose; nicht für den Regelbetrieb.</td>
+            </tr>
+            <tr>
+                <td>6</td>
+                <td>Admin</td>
+                <td><code>!</code></td>
+                <td>Serversteuerung, Shutdown, Rangverwaltung.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3>Wichtige Regeln</h3>
+        <ul>
+            <li>Ränge sind kumulativ: Ein höherer Rang darf alle Befehle niedrigerer Ränge nutzen.</li>
+            <li>Spieler und Rang 1 verwenden <code>@</code>; ab Rang 2 funktioniert zusätzlich <code>!</code>.</li>
+            <li>Im Jail sind alle Befehle gesperrt.</li>
+            <li>Befehlsnamen werden kleingeschrieben; Groß- und Kleinschreibung ist unerheblich.</li>
+            <li>Einige Befehle besitzen Aliase, zum Beispiel <code>!summon</code> für
+                <code>!warphere</code>.</li>
+        </ul>
+
+        <h3>Sicherheitsklassen in der Referenz</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:22%">Klasse</th>
+                <th>Bedeutung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><span class="badge safe">SAFE</span></td>
+                <td>Reine Anzeige oder unkritische Ausgabe.</td>
+            </tr>
+            <tr>
+                <td><span class="badge state">STATE</span></td>
+                <td>Verändert Zustand, normalerweise begrenzt oder umkehrbar.</td>
+            </tr>
+            <tr>
+                <td><span class="badge danger">DANGER</span></td>
+                <td>Destruktiv, moderativ oder dauerhaft spielrelevant.</td>
+            </tr>
+            <tr>
+                <td><span class="badge ops">OPS</span></td>
+                <td>Serverbetrieb, globale Konfiguration, Speichern, Shutdown.</td>
+            </tr>
+            <tr>
+                <td><span class="badge vps-no">VPS-NO</span></td>
+                <td>Entwicklungs- und Diagnosefunktion; nicht im Regelbetrieb verwenden.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="callout danger">
+            <span class="title">Behobene Rangfehler</span>
+            <p>
+                <code>gachalist</code>, <code>loot</code> und <code>mobskill</code> wurden ohne
+                Rangangabe registriert und waren dadurch für alle Spieler verfügbar.
+                <code>mobskill</code> wendet einen Monster-Skill auf die gesamte Map an und ist der
+                gefährlichste dieser drei Fälle. Alle drei sind jetzt im Code und in diesem Handbuch
+                ausdrücklich als JrGM-Befehle mit Rang 2 registriert.
+            </p>
+        </div>
+    </section>
+
+    <!-- 12 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">12</span>Testprotokoll Stufen 1–30</h2>
+
+        <div class="callout info">
+            <span class="title">Ziel</span>
+            <p>
+                Die Stufen 1–30 sollen die Klasse vermitteln und zügig verlaufen. Es gibt noch kein
+                verbindliches Zeitbudget; der Test soll belastbare Messwerte erzeugen und nicht einen
+                erfundenen Grenzwert erzwingen.
+            </p>
+        </div>
+
+        <h3>Vorbereitung</h3>
+        <pre><code>ops/build.sh
+ops/smoke-test.sh
+ops/start.sh --build
+ops/client-status.sh
+ops/client-run-local.sh</code></pre>
+        <p>
+            Testdatei anlegen: Konto, Charakter, Startjob, Zieljob, Solo/Duo/Companion, Raten,
+            Start- und Endzeit je Stufe, genutzte Karten, Quest-/Grind-/PQ-Anteil, Tode, Verbrauch
+            an Tränken, Munition und Rückkehrrollen, subjektive Bewertung je Abschnitt.
+        </p>
+
+        <h3>Messblatt je Charakter</h3>
+        <div class="checklist">
+            <ul>
+                <li>Zeit pro Stufe für 1–10, 11–20, 21–30</li>
+                <li>Anteil Quest-, Grind- und Party-Quest-Erfahrung</li>
+                <li>Verbrauchte Heil- und Manatränke</li>
+                <li>Munitionsverbrauch bei Fernkampfklassen</li>
+                <li>Reise- und Leerlaufzeiten</li>
+                <li>Zeitpunkt, ab dem die Klassenidentität erkennbar ist</li>
+                <li>Auffälligkeiten bei Erfahrung, Mesos oder Drops</li>
+            </ul>
+        </div>
+
+        <h3>Phase EG-1 — Charaktererstellung und Stufe 1</h3>
+        <ol class="steps">
+            <li>Frischen Explorer-Anfänger erstellen und das Skillfenster öffnen.</li>
+            <li>Erwartung: <strong>3 verfügbare Skillpunkte</strong>.</li>
+            <li>Mit Noblesse und Legend wiederholen.</li>
+            <li>Einen Veteranen-Charakter prüfen: kein Anfängerbonus.</li>
+            <li>Evan prüfen: kein Anfängerbonus und kein Erstjob-Kit.</li>
+        </ol>
+        <pre><code>SELECT id, name, level, job, sp
+FROM characters
+WHERE name IN ('&lt;Explorer&gt;','&lt;Noblesse&gt;','&lt;Legend&gt;','&lt;Evan&gt;');</code></pre>
+
+        <h3>Phase EG-2 — Ultra-Anfängerfertigkeiten</h3>
+        <ul>
+            <li><strong>Three Snails:</strong> Schaden steigt deutlich mit dem Level; pro Angriff wird genau eine Schale verbraucht. Ohne Schale kein kostenloser Angriff.</li>
+            <li><strong>Recovery:</strong> Heilung etwa alle 2 Sekunden statt 5.</li>
+            <li><strong>Nimble Feet:</strong> deutlich erhöhte Lauf- und Sprungwerte.</li>
+            <li>Keine zusätzlichen Erfahrungs- oder Meso-Einträge; keine Wirkung auf Klassenfertigkeiten.</li>
+        </ul>
+
+        <h3>Phase EG-3 — Erster Jobwechsel und Starterkit</h3>
+        <p>Erwartetes Kit für berechtigte Erstjobs:</p>
+        <ul>
+            <li>50 Rote Tränke (<code>2000000</code>)</li>
+            <li>50 Blaue Tränke (<code>2000003</code>)</li>
+            <li>5 Rückkehrrollen (<code>2030000</code>)</li>
+            <li>zusätzlich die vorhandene Waffe des jeweiligen Klassenpfads</li>
+        </ul>
+        <p>Munition siehe Kapitel 13. Negative Fälle:</p>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:44%">Fall</th>
+                <th>Erwartung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><code>!job &lt;Erstjob&gt;</code> zweimal</td>
+                <td>Kit nur beim echten Anfänger-Übergang.</td>
+            </tr>
+            <tr>
+                <td>Erstjob → Zweitjob</td>
+                <td>Kein weiteres Kit.</td>
+            </tr>
+            <tr>
+                <td>Veteranen-Charakter</td>
+                <td>Kein Anfängerbonus.</td>
+            </tr>
+            <tr>
+                <td>Kits in Konfiguration deaktiviert</td>
+                <td>Jobwechsel gelingt, kein Kit.</td>
+            </tr>
+            <tr>
+                <td>Inventar voll</td>
+                <td>Jobwechsel gelingt weiterhin; nicht passende Einträge werden übersprungen.</td>
+            </tr>
+            <tr>
+                <td>GM setzt erst Anfänger, dann Erstjob</td>
+                <td>Kit kann erneut ausgelöst werden — bekannte GM-Grenze.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3>Phase EG-4 — <code>@training</code></h3>
+        <ul>
+            <li>Erster Aufruf kann melden, dass der Index aufgebaut wird; kurz danach wiederholen.</li>
+            <li>Erwartung: maximal fünf Vorschläge, Monsterlevel innerhalb ±10, Karten-ID sowie Karten- und Monstername.</li>
+            <li><code>@training 1</code>, <code>15</code>, <code>25</code>, <code>30</code> prüfen.</li>
+            <li><strong>Kein Teleport.</strong> Vorher- und Nachher-Karte müssen identisch sein.</li>
+            <li><code>@training abc</code>, <code>@training 0</code> und <code>@training 201</code> werden abgelehnt.</li>
+        </ul>
+
+        <h3>Phase EG-5 — Hinweisleiter</h3>
+        <ul>
+            <li>Stufe 10: Hinweis auf die fünf Klassenstädte.</li>
+            <li>Stufe 15: Hinweis auf das Lager.</li>
+            <li>Stufe 30: Hinweis auf den passenden Klassenlehrer.</li>
+            <li>Nach Aus- und Einloggen darf ein gesehener Hinweis nicht erneut erscheinen.</li>
+            <li>Aran und Evan besitzen keinen eigenen Stufe-30-Hinweis — bewusst dokumentierte Lücke.</li>
+        </ul>
+
+        <h3>Phase EG-7 — Tempo und Spielgefühl</h3>
+        <p>
+            Für jeden Abschnitt bewerten, ob er zu langsam, passend oder zu schnell wirkt, ob die
+            Klassenmechanik verständlich ist und ob Reisezeiten stören. Danach Solo gegen Companion
+            vergleichen: Zeitersparnis, Erfahrungsverteilung, Ressourcenverbrauch und subjektiver
+            Vorteil.
+        </p>
+    </section>
+
+    <!-- 13 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">13</span>Klassen- und Munitionstests</h2>
+
+        <h3>Starterkit-Matrix</h3>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:22%">Familie</th>
+                <th style="width:26%">Erste Jobs</th>
+                <th style="width:16%">Anfänger-SP</th>
+                <th>Munition</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Explorer</td>
+                <td>100, 200, 300, 400, 500</td>
+                <td>ja (3)</td>
+                <td>Bowman 2000 Pfeile; Thief 1000 Sterne; Pirate 2000 Kugeln</td>
+            </tr>
+            <tr>
+                <td>Cygnus Knights</td>
+                <td>1100–1500</td>
+                <td>ja (3)</td>
+                <td>Wind Archer 2000 Pfeile; Night Walker 1000 Sterne; Thunder Breaker keine</td>
+            </tr>
+            <tr>
+                <td>Aran (Legend)</td>
+                <td>2100</td>
+                <td>ja (3)</td>
+                <td>keine</td>
+            </tr>
+            <tr>
+                <td>Evan</td>
+                <td>2200</td>
+                <td>nein</td>
+                <td>kein Erstjob-Kit im aktuellen Stand</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3>Pflichtfälle</h3>
+        <div class="checklist">
+            <ul>
+                <li>Explorer Bowman: Pfeilverbrauch pro Angriff und Nachschub prüfen</li>
+                <li>Explorer Thief mit Klaue: Sternverbrauch; zusätzlich Dolchvarianten testen</li>
+                <li>Explorer Pirate: Nahkampf und Schusswaffe getrennt prüfen</li>
+                <li>Wind Archer: Pfeilversorgung analog zum Bowman</li>
+                <li>Night Walker: Sternversorgung analog zum Thief</li>
+                <li>Thunder Breaker: <strong>keine</strong> Kugeln erwarten — Negativtest</li>
+                <li>Alle fünf Cygnus-Erstjobs mindestens einmal vollständig spielen</li>
+                <li>Aran: reguläres Kit, keine Munition</li>
+                <li>Evan: bewusste Abweichung dokumentieren</li>
+            </ul>
+        </div>
+
+        <div class="callout warn">
+            <span class="title">Bekannte Abweichungen</span>
+            <ul>
+                <li>Pirate ist im Companion-Code als Nahkampfprofil ohne Munitionspflicht angelegt; eine Schusswaffen-Variante ist dort nicht erreichbar.</li>
+                <li>Thief nutzt standardmäßig Klaue und Sterne; eine Dolch-Umschaltung ist nicht erkennbar implementiert.</li>
+                <li>Magier verbrauchen im Companion-Kampf keine MP, obwohl MP vor dem Angriff geprüft wird.</li>
+                <li>Der Stufe-30-Hinweis umfasst nur fünf Familienfilter; Cygnus wird mit Explorer-Lehrern zusammengefasst.</li>
+            </ul>
+        </div>
+
+        <h3>SQL-Prüfungen</h3>
+        <pre><code>SELECT jobid, itemid, quantity, note
+FROM coop_first_job_kits
+ORDER BY jobid, itemid;
+
+SELECT inventorytype, itemid, SUM(quantity) AS qty
+FROM inventoryitems
+WHERE characterid = &lt;CHAR_ID&gt;
+GROUP BY inventorytype, itemid
+ORDER BY inventorytype, itemid;</code></pre>
+        <p>Vorher-/Nachher-Differenz exakt gegen die Matrix prüfen; bereits vorhandene Tränke
+            berücksichtigen.</p>
+    </section>
+
+    <!-- 14 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">14</span>Companion-Testprotokoll</h2>
+
+        <div class="callout info">
+            <span class="title">Grundprinzip</span>
+            <p>
+                Ein Companion ist ein eigener Charakter desselben Accounts, der dem Besitzer folgt und
+                optional kämpft. Er ist bewusst kein vollwertiger Spieler: keine autonome Routenplanung,
+                keine Seile oder Leitern, keine Party-Quests, keine Unterstützungsfertigkeiten.
+            </p>
+        </div>
+
+        <h3>Voraussetzungen</h3>
+        <ul>
+            <li>Zwei Charaktere auf demselben Account und in derselben Welt; der Begleiter ist offline.</li>
+            <li>Besitzer ist allein in einer Party und Party-Leader.</li>
+            <li>Die aktuelle Karte steht in der erlaubten Kartenliste.</li>
+            <li>Standardmäßig erlaubt: <code>100000001</code>, <code>100000004</code>,
+                <code>100020000</code>, <code>100030000</code>.</li>
+        </ul>
+
+        <h3>Phase CP-1 — Binden und Rufen</h3>
+        <pre><code>@companion bind &lt;alt-name&gt;
+@companion status
+@companion spawn
+@companion status</code></pre>
+        <p>Erwartung: Bindung erfolgreich, Status erst inaktiv, dann aktiv; der Begleiter erscheint
+            auf einem gültigen Standpunkt und tritt der Party bei.</p>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:44%">Negativfall</th>
+                <th>Erwartung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Funktion deaktiviert</td>
+                <td>Binden und Rufen abgelehnt.</td>
+            </tr>
+            <tr>
+                <td>Keine Party oder Party voll</td>
+                <td>Rufen abgelehnt.</td>
+            </tr>
+            <tr>
+                <td>Fremdkonto oder andere Welt</td>
+                <td>Binden abgelehnt.</td>
+            </tr>
+            <tr>
+                <td>Zielcharakter online</td>
+                <td>Binden und Rufen abgelehnt.</td>
+            </tr>
+            <tr>
+                <td>Anfänger, Noblesse, GM-Job</td>
+                <td>Abgelehnt, kein Kampfprofil.</td>
+            </tr>
+            <tr>
+                <td>Zweitjob bei Tier-Grenze 1</td>
+                <td>Abgelehnt.</td>
+            </tr>
+            <tr>
+                <td>Karte nicht erlaubt oder mit Einstiegsskript</td>
+                <td>Abgelehnt.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3>Phase CP-2 — Modi und Folgen</h3>
+        <ul>
+            <li><code>passive</code>: kein eigener Angriff.</li>
+            <li><code>follow</code>: folgt, greift nicht an.</li>
+            <li><code>grind</code>: folgt und greift gültige Ziele an.</li>
+            <li><code>stay</code>: bleibt stehen; keine autonome Route.</li>
+            <li><code>support</code>: ausdrücklich nicht implementiert.</li>
+            <li>Moduswechsel bei aktivem Begleiter ist abgelehnt: erst entlassen, dann Modus setzen.</li>
+        </ul>
+        <p>
+            Beim Folgen wird geprüft, ob der Begleiter auf gültigen Standpunkten landet und nicht
+            unter die Karte fällt. Portale werden nur bei offenen, skriptlosen Zielen und nur
+            innerhalb der Frist mitgenommen.
+        </p>
+
+        <h3>Phase CP-3 — Kampf</h3>
+        <ol class="steps">
+            <li><code>@companion mode grind</code> setzen, dann rufen.</li>
+            <li>Geeignetes Monster innerhalb der Reichweite wählen.</li>
+            <li>Erwartung: kein Boss, Schaden aus echten Werten, gedeckelt durch Anteil und Obergrenze.</li>
+            <li>Erfahrung läuft über die normale Party-Verteilung.</li>
+            <li>Munitionsverbrauch je Angriff prüfen (siehe Kapitel 13).</li>
+        </ol>
+
+        <h3>Phase CP-4 — Tränke und eingehender Schaden</h3>
+        <ul>
+            <li>Unter 45 % Lebenspunkten trinkt der Begleiter selbst; genau eine Einheit, Mindestabstand 1500 ms.</li>
+            <li>Unter 25 % Manapunkten entsprechend ein Manatrank.</li>
+            <li>Falsche oder fehlende Tränke führen nicht zu kostenlos erzeugten Gegenständen.</li>
+            <li>Eingehender Schaden ist modellierter Kontaktschaden; Krankheiten, Monsterfertigkeiten und Reflexschaden sind nicht modelliert.</li>
+        </ul>
+
+        <h3>Phase CP-5 — Beute und Ausrüstung</h3>
+        <pre><code>@companion loot on
+@companion spawn
+@companion equip &lt;Quellslot&gt; &lt;Zielslot&gt;</code></pre>
+        <ul>
+            <li>Beute landet ausschließlich im Inventar des Begleiters; fremde Beute bleibt liegen.</li>
+            <li>Volles Inventar erzeugt keine Duplikate und keinen Transfer zum Besitzer.</li>
+            <li>Ausrüstung wird über die normalen Validierungen bewegt; ungültige Aktionen werden abgelehnt.</li>
+        </ul>
+
+        <h3>Phase CP-6 — Persistenz</h3>
+        <div class="callout warn">
+            <span class="title">Wichtigste Einschränkung</span>
+            <p>
+                Ein Companion wird außerhalb der normalen Spielerverwaltung geladen. Er wird nur bei
+                erfolgreichem Entlassen, beim Logout des Besitzers, beim Channelwechsel und beim
+                sauberen Herunterfahren gespeichert. Ein Absturz oder Stromausfall verliert den
+                Fortschritt seit dem Rufen.
+            </p>
+        </div>
+        <ol class="steps">
+            <li>Werte vor dem Entlassen notieren: Leben, Mana, Erfahrung, Karte, Mesos, Inventar.</li>
+            <li><code>@companion dismiss</code> ausführen.</li>
+            <li>Datenbank prüfen und danach manuell als Begleiter-Charakter einloggen.</li>
+            <li>Logout, Channelwechsel und sauberes Herunterfahren separat testen.</li>
+            <li>Im Log darf <strong>keine</strong> Zeile <code>Companion shutdown save FAILED</code> stehen.</li>
+        </ol>
+        <pre><code>SELECT id, name, level, job, exp, hp, mp, map, meso
+FROM characters
+WHERE id IN (&lt;OWNER_ID&gt;, &lt;COMPANION_ID&gt;);
+
+SELECT owner_character_id, companion_character_id, mode, loot_enabled
+FROM coop_companion_bindings
+WHERE owner_character_id = &lt;OWNER_ID&gt;;</code></pre>
+
+        <h3>Abschluss eines Laufs</h3>
+        <ol class="steps">
+            <li><code>@companion dismiss</code>, Zustand verifizieren, ausloggen.</li>
+            <li><code>@companion unbind</code>; danach darf keine Bindungszeile mehr existieren.</li>
+            <li>Telemetriedaten vor einem Wipe exportieren.</li>
+            <li>Für den Normalbetrieb Testkonfiguration zurücknehmen und Server neu starten.</li>
+        </ol>
+    </section>
+
+    <!-- 15 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">15</span>Solo-Kerning-PQ</h2>
+
+        <p>
+            Die Kerning-Party-Quest ist für die Stufen 21–30 gedacht und erlaubt 1–4 Spieler. Der
+            Solo-Eintritt ist umgesetzt; die eigentliche Prüfung ist der vollständige Durchlauf
+            aller vier Stufen.
+        </p>
+
+        <ol class="steps">
+            <li>Allein eine Party gründen; der Spieler ist automatisch Leiter.</li>
+            <li>Mit Stufe 21–30 die Party-Quest betreten.</li>
+            <li><strong>Stufe 1:</strong> Frage beantworten, die korrekte Anzahl Coupons sammeln, den Pass erhalten und selbst abgeben.</li>
+            <li><strong>Stufen 2–4:</strong> als Solo-Leiter auf <em>keinem</em> Rätselpunkt stehen und bei Cloto prüfen lassen.</li>
+            <li>Abschlussstufe und Belohnung beenden.</li>
+            <li>Prüfen: keine doppelten Coupons, Pässe, Erfahrungspunkte, Mesos oder Preise.</li>
+        </ol>
+
+        <table>
+            <thead>
+            <tr>
+                <th style="width:44%">Prüffall</th>
+                <th>Erwartung</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Stufe 20</td>
+                <td>Kein Eintritt.</td>
+            </tr>
+            <tr>
+                <td>Stufe 31</td>
+                <td>Kein Eintritt.</td>
+            </tr>
+            <tr>
+                <td>Falsche Couponzahl</td>
+                <td>Kein Pass.</td>
+            </tr>
+            <tr>
+                <td>Pass nach der Frage weggeworfen</td>
+                <td>Verständliche Wiederholung oder Fehlermeldung.</td>
+            </tr>
+            <tr>
+                <td>Tod oder Trennung solo</td>
+                <td>Der Lauf endet — dokumentiertes Verhalten.</td>
+            </tr>
+            <tr>
+                <td>Party mit 2/3/4 Spielern</td>
+                <td>Genau 1/2/3 Nicht-Leiter auf gültigen Punkten.</td>
+            </tr>
+            <tr>
+                <td>Spieler verlässt in Stufe 2–4 die Party</td>
+                <td>Kombination wird an die neue Teamgröße angepasst.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="callout warn">
+            <span class="title">UNGETESTET</span>
+            <p>
+                Ein vollständiger Solo-Durchlauf aller vier Stufen im Client ist noch nicht praktisch
+                abgenommen. Die Skriptlogik ist durch Unit-Tests und Syntaxprüfungen abgedeckt, nicht
+                durch einen echten Spielabschluss.
+            </p>
+        </div>
+    </section>
+
+    <!-- 16 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">16</span>Telemetrie und Datenprüfungen</h2>
+
+        <div class="callout info">
+            <span class="title">Zweck</span>
+            <p>
+                Die Early-Game-Telemetrie beantwortet die Frage, wie lange die Stufen 1–30 tatsächlich
+                dauern. Sie ist optional, asynchron und bewusst grob.
+            </p>
+        </div>
+
+        <h3>Grenzen der Messwerte</h3>
+        <ul>
+            <li>Erfasst werden nur positive Erfahrungswerte bei Stufe 1–30.</li>
+            <li>Die Quelle wird immer als <code>UNATTRIBUTED</code> gespeichert; Monster, Quest, Item und Party-Quest lassen sich serverseitig nicht unterscheiden.</li>
+            <li><code>logged_at</code> ist der Schreibzeitpunkt, nicht der Moment des Erfahrungsgewinns; bis zu 60 Sekunden Abweichung.</li>
+            <li>Erfahrung pro Stunde ist unbrauchbar, wenn eine Stufe innerhalb eines einzigen Schreibintervalls abgeschlossen wurde.</li>
+        </ul>
+
+        <h3>Grenzprüfung</h3>
+        <ol class="steps">
+            <li>Erfahrung auf Stufe 1, 30 und 31 sammeln.</li>
+            <li>Mindestens 60 Sekunden warten oder sauber herunterfahren.</li>
+            <li>Erwartung: Zeilen für Stufe 1 und 30, keine für 31; Quelle immer <code>UNATTRIBUTED</code>.</li>
+        </ol>
+
+        <h3>Auswertungen</h3>
+        <pre><code>SELECT level,
+       SUM(gained_exp) AS total_exp,
+       COUNT(*) AS samples,
+       MIN(logged_at) AS first_at,
+       MAX(logged_at) AS last_at,
+       TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at)) AS observed_seconds
+FROM coop_early_game_exp_log
+WHERE characterid = &lt;CHAR_ID&gt;
+  AND level BETWEEN 1 AND 30
+GROUP BY level
+ORDER BY level;</code></pre>
+        <pre><code>SELECT jobid, mapid, level,
+       SUM(gained_exp) AS total_exp,
+       COUNT(*) AS samples
+FROM coop_early_game_exp_log
+WHERE level BETWEEN 1 AND 30
+GROUP BY jobid, mapid, level
+ORDER BY jobid, level, total_exp DESC;</code></pre>
+
+        <h3>Integritätsprüfung</h3>
+        <pre><code>SELECT characterid, level, jobid, mapid, gained_exp, source
+FROM coop_early_game_exp_log
+WHERE level NOT BETWEEN 1 AND 30
+   OR gained_exp &lt;= 0
+   OR source &lt;&gt; 'UNATTRIBUTED';</code></pre>
+        <p>Erwartung: keine Zeilen.</p>
+
+        <h3>Migrations- und Tabellenprüfung</h3>
+        <pre><code>SELECT ID, AUTHOR, DATEEXECUTED
+FROM DATABASECHANGELOG
+WHERE ID LIKE 'coop-%'
+ORDER BY ID;</code></pre>
+        <p>
+            Der Smoke-Test prüft unter anderem 19 Co-op-Migrationen, die Starterkit-Tabelle samt
+            Munitionszeilen, die Companion-Bindungstabelle, die Telemetrietabelle mit Quellenvorgabe
+            sowie die Absicherung des GM-Rangbereichs.
+        </p>
+
+        <h3>Logmeldungen</h3>
+        <p>Erwartet: <code>First-job kit granted</code>, <code>Training spot index built</code>,
+            <code>Companion bound</code>, <code>Companion spawned</code>,
+            <code>Companion dismissed</code>, <code>Companion shutdown complete</code>.</p>
+        <p>Zu melden: <code>First-job kit item did not fit</code>,
+            <code>Early-game telemetry flush failed</code>, <code>Companion save failed</code>,
+            <code>Companion shutdown save FAILED</code>, <code>SAVE_FAILED</code>.</p>
+    </section>
+
+    <!-- 17 -->
+
+    <section>
+        <h2 class="chapter"><span class="num">17</span>Fehlerdiagnose</h2>
+
+        <table>
+            <thead>
+            <tr>
+                <th style="width:34%">Symptom</th>
+                <th style="width:32%">Prüfung</th>
+                <th>Ursache</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Java 21 fehlt</td>
+                <td><code>ops/build.sh</code></td>
+                <td>SDKMAN oder JDK 21 nicht installiert.</td>
+            </tr>
+            <tr>
+                <td>Docker nicht nutzbar</td>
+                <td><code>docker info</code>, <code>ops/status.sh</code></td>
+                <td>Daemon aus oder Gruppenzugehörigkeit noch nicht aktiv.</td>
+            </tr>
+            <tr>
+                <td>Server startet nicht</td>
+                <td><code>ops/logs.sh server</code></td>
+                <td>Build, Konfiguration, Migration oder Datenbank.</td>
+            </tr>
+            <tr>
+                <td>Datenbank nicht erreichbar</td>
+                <td><code>ops/logs.sh db</code></td>
+                <td>Volume, Passwort oder Initialisierung.</td>
+            </tr>
+            <tr>
+                <td>Kein „Cosmic is now online“</td>
+                <td><code>ops/smoke-test.sh</code></td>
+                <td>Start dauert länger als 180 Sekunden oder Container beendet.</td>
+            </tr>
+            <tr>
+                <td>Login-Port nicht erreichbar</td>
+                <td><code>ops/status.sh</code></td>
+                <td>Server offline oder Portkonflikt.</td>
+            </tr>
+            <tr>
+                <td>Clientstatus meldet Fehler</td>
+                <td><code>ops/client-status.sh</code></td>
+                <td>Runner, Prefix, Manifest oder Port.</td>
+            </tr>
+            <tr>
+                <td>Client startet nicht</td>
+                <td><code>.local/client-logs/</code></td>
+                <td>Wine, Soda, Flatpak oder EXE.</td>
+            </tr>
+            <tr>
+                <td>Absturz in <code>wow64cpu.dll</code></td>
+                <td>Prefixarchitektur</td>
+                <td>Falscher 64-Bit- oder WoW64-Prefix.</td>
+            </tr>
+            <tr>
+                <td>Hash-Fehler beim Client</td>
+                <td><code>verify-client.py</code></td>
+                <td>Datei verändert, beschädigt oder falsches Profil.</td>
+            </tr>
+            <tr>
+                <td>Webregistrierung schlägt fehl</td>
+                <td>Einladungscode und Rate Limit prüfen</td>
+                <td>Nach Fehlversuchen oder 429: kurz warten und die Seite neu laden (frische Session).</td>
+            </tr>
+            <tr>
+                <td>GM-Änderung abgelehnt</td>
+                <td><code>ops/stop-server.sh</code></td>
+                <td>Server läuft oder Account ist online.</td>
+            </tr>
+            <tr>
+                <td>Wiederherstellung scheitert</td>
+                <td><code>ops/logs.sh db</code></td>
+                <td>Datenbank nicht erreichbar oder Dump beschädigt.</td>
+            </tr>
+            <tr>
+                <td>Befehl wirkt nicht</td>
+                <td>Rang und Präfix</td>
+                <td>Falsches Präfix, zu niedriger Rang oder Jail.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="title">Fehler melden</span>
+            <p>
+                Meldung an [BETREIBER-KONTAKT] mit Datum, Charakter, Karte, Befehl, genauer Meldung
+                und — falls sicher möglich — den relevanten Logzeilen. Keine Passwörter, Tokens oder
+                vollständigen Backups mitsenden.
+            </p>
+        </div>
+    </section>
+
+    <!-- 18 -->
+
+    <section class="appendix">
+        <h2 class="chapter"><span class="num">18</span>Befehlsreferenz (184 Befehle)</h2>
+        <p>
+            Vollständige Referenz aller registrierten Befehle einschließlich Aliase. Die Reihenfolge
+            folgt den Rängen von Member bis Admin, innerhalb eines Rangs alphabetisch. Die Spalte
+            „Klasse“ ist eine Sicherheitsbewertung dieses Handbuchs, keine Ingame-Funktion.
+        </p>
+
+        <!-- COMMANDS -->
+    </section>
+
+</main>
+</body>
+</html>
